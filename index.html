@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://upload-widget.cloudinary.com/global/all.js"></script>
+    <style>
+        .active-tab { background-color: #1d4ed8; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-white shadow-lg">
+            <div class="p-4 border-b">
+                <h1 class="text-xl font-bold">Admin Panel</h1>
+            </div>
+            <nav class="p-4">
+                <button onclick="handleTabSwitch(this, 'users')" data-tab="users" 
+                        class="w-full text-left px-4 py-2 rounded mb-2 active-tab text-white">
+                    <i class="fas fa-users mr-2"></i> Users
+                </button>
+                <button onclick="handleTabSwitch(this, 'books')" data-tab="books" 
+                        class="w-full text-left px-4 py-2 rounded mb-2 hover:bg-gray-100">
+                    <i class="fas fa-book mr-2"></i> Books
+                </button>
+                <button onclick="handleTabSwitch(this, 'genres')" data-tab="genres" 
+                        class="w-full text-left px-4 py-2 rounded mb-2 hover:bg-gray-100">
+                    <i class="fas fa-tags mr-2"></i> Genres
+                </button>
+                <button onclick="handleTabSwitch(this, 'reading')" data-tab="reading" 
+                        class="w-full text-left px-4 py-2 rounded mb-2 hover:bg-gray-100">
+                    <i class="fas fa-book-reader mr-2"></i> Reading
+                </button>
+                <button onclick="handleTabSwitch(this, 'subscriptions')" data-tab="subscriptions" 
+                        class="w-full text-left px-4 py-2 rounded mb-2 hover:bg-gray-100">
+                    <i class="fas fa-credit-card mr-2"></i> Subscriptions
+                </button>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto">
+            <!-- Stats Row -->
+            <div class="p-6 grid grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-sm text-gray-500">Users</div>
+                    <div id="total-users" class="text-2xl font-bold">0</div>
+                </div>
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-sm text-gray-500">Books</div>
+                    <div id="total-books" class="text-2xl font-bold">0</div>
+                </div>
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-sm text-gray-500">Active Readers</div>
+                    <div id="active-readers" class="text-2xl font-bold">0</div>
+                </div>
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-sm text-gray-500">Active Subscriptions</div>
+                    <div id="active-subscriptions" class="text-2xl font-bold">0</div>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="px-6 pb-6">
+                <div class="bg-white rounded shadow">
+                    <!-- Search -->
+                    <div class="p-4 border-b">
+                        <input type="text" 
+                               id="search-input" 
+                               placeholder="Search..." 
+                               class="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Tables -->
+                    <div class="p-4">
+                        <!-- Users Table -->
+                        <div id="users-content" class="tab-content">
+                            <table class="w-full">
+                                <thead class="border-b">
+                                    <tr>
+                                        <th class="text-left py-2">Name</th>
+                                        <th class="text-left py-2">Email</th>
+                                        <th class="text-left py-2">Status</th>
+                                        <th class="text-right py-2">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Books Table -->
+                        <div id="books-content" class="tab-content hidden">
+                            <div class="mb-4 flex justify-end">
+                                <button onclick="dashboardManager.addBook()" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i>Add Book
+                                </button>
+                            </div>
+                            <table class="w-full">
+                                <thead class="border-b">
+                                    <tr>
+                                        <th class="text-left py-2">Title</th>
+                                        <th class="text-left py-2">Author</th>
+                                        <th class="text-left py-2">Genre</th>
+                                        <th class="text-right py-2">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="books-table"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Genres Table -->
+                        <div id="genres-content" class="tab-content hidden">
+                            <div class="mb-4 flex justify-end">
+                                <button onclick="dashboardManager.addGenre()"
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i>Add Genre
+                                </button>
+                            </div>
+                            <table class="w-full">
+                                <thead class="border-b">
+                                    <tr>
+                                        <th class="text-left py-2">Name</th>
+                                        <th class="text-left py-2">Description</th>
+                                        <th class="text-left py-2">Books</th>
+                                        <th class="text-right py-2">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="genres-table"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Reading States Table -->
+                        <div id="reading-content" class="tab-content hidden">
+                            <table class="w-full">
+                                <thead class="border-b">
+                                    <tr>
+                                        <th class="text-left py-2">User</th>
+                                        <th class="text-left py-2">Book</th>
+                                        <th class="text-left py-2">Progress</th>
+                                        <th class="text-right py-2">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reading-table"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Subscription Management -->
+                        <div id="subscriptions-content" class="tab-content hidden">
+                            <div class="mb-4 flex justify-between">
+                                <h2 class="text-xl font-bold">Subscription Plans</h2>
+                                <button onclick="dashboardManager.addSubscriptionPlan()" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i>Add Plan
+                                </button>
+                            </div>
+                            
+                            <!-- Plans Table -->
+                            <div class="mb-8">
+                                <table class="w-full">
+                                    <thead class="border-b">
+                                        <tr>
+                                            <th class="text-left py-2">Name</th>
+                                            <th class="text-left py-2">Price</th>
+                                            <th class="text-left py-2">Duration</th>
+                                            <th class="text-left py-2">Features</th>
+                                            <th class="text-left py-2">Status</th>
+                                            <th class="text-right py-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subscription-plans-table"></tbody>
+                                </table>
+                            </div>
+                            
+                            <h2 class="text-xl font-bold mt-8 mb-4">Subscriber List</h2>
+                            <!-- Subscribers Table -->
+                            <table class="w-full">
+                                <thead class="border-b">
+                                    <tr>
+                                        <th class="text-left py-2">User</th>
+                                        <th class="text-left py-2">Plan</th>
+                                        <th class="text-left py-2">Start Date</th>
+                                        <th class="text-left py-2">End Date</th>
+                                        <th class="text-left py-2">Status</th>
+                                        <th class="text-right py-2">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subscribers-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-2 gap-4 mt-6">
+                    <div class="bg-white p-4 rounded shadow">
+                        <canvas id="user-activity-chart"></canvas>
+                    </div>
+                    <div class="bg-white p-4 rounded shadow">
+                        <canvas id="genres-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Book Modal -->
+    <div id="edit-book-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="book-modal-title" class="text-lg font-medium">Edit Book</h3>
+                <button onclick="document.getElementById('edit-book-modal').classList.add('hidden')" 
+                        class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="edit-book-form" class="space-y-4">
+                <input type="hidden" id="edit-book-id">
+                <input type="hidden" id="edit-book-mode" value="edit">
+                
+                <!-- Basic Info -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                        <input type="text" id="edit-book-title" required
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Author</label>
+                        <input type="text" id="edit-book-author" required
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- URLs -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Cover URL</label>
+                        <div class="flex gap-2">
+                            <input type="url" id="edit-book-cover-url"
+                                   class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button type="button" onclick="dashboardManager.uploadImage('cover')"
+                                    class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                <i class="fas fa-upload"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+                        <div class="flex gap-2">
+                            <input type="url" id="edit-book-image-url"
+                                   class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button type="button" onclick="dashboardManager.uploadImage('image')"
+                                    class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                <i class="fas fa-upload"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">PDF URL</label>
+                    <div class="flex gap-2">
+                        <input type="url" id="edit-book-pdf-url"
+                               class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="dashboardManager.uploadFile('pdf')"
+                                class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-upload"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea id="edit-book-description" rows="3" required
+                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <!-- Additional Info -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Publisher</label>
+                        <input type="text" id="edit-book-publisher"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                        <select id="edit-book-language"
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="en">English</option>
+                            <option value="ar">Arabic</option>
+                            <option value="fr">French</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Page Count</label>
+                        <input type="number" id="edit-book-page-count" min="0"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- Numbers -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                        <input type="number" id="edit-book-rating" min="0" max="5" step="0.1"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Release Date</label>
+                        <input type="date" id="edit-book-release-date"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- Checkboxes -->
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="edit-book-is-premium"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Premium</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="edit-book-featured"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Featured</span>
+                    </label>
+                </div>
+
+                <!-- Genres -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Genres</label>
+                    <select id="edit-book-genres" multiple
+                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="Art">Art</option>
+                        <option value="Science">Science</option>
+                        <option value="History">History</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Literature">Literature</option>
+                    </select>
+                    <p class="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple genres</p>
+                </div>
+
+                <!-- Add these fields inside the edit-book-form -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ISBN</label>
+                        <input type="text" id="edit-book-isbn"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Preview Pages</label>
+                        <input type="number" id="edit-book-preview-pages" min="0"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- Audio Files -->
+                <div class="border-t pt-4 mt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-lg font-medium">Audio Files</h4>
+                        <button type="button" id="add-audio-file" onclick="dashboardManager.uploadFile('audio')"
+                                class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>Add Audio File
+                        </button>
+                    </div>
+                    <div id="audio-files-container" class="space-y-2">
+                        <!-- Audio files will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Audio Config -->
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="edit-book-has-audio"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Has Pre-recorded Audio</span>
+                    </label>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex space-x-2 pt-4">
+                    <button type="submit" 
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        Save Changes
+                    </button>
+                    <button type="button" 
+                            onclick="document.getElementById('edit-book-modal').classList.add('hidden')"
+                            class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+        window.firebase = { getFirestore };
+    </script>
+
+    <!-- Application Scripts -->
+    <script src="js/script.js" type="module"></script>
+
+    <script>
+        // Initialize first tab after scripts are loaded
+        window.addEventListener('load', () => {
+            const firstTab = document.querySelector('[data-tab="users"]');
+            window.handleTabSwitch(firstTab, 'users');
+        });
+    </script>
+
+    <!-- Edit Genre Modal -->
+    <div id="edit-genre-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="genre-modal-title" class="text-lg font-medium">Edit Genre</h3>
+                <button onclick="document.getElementById('edit-genre-modal').classList.add('hidden')"
+                        class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="edit-genre-form" class="space-y-4">
+                <input type="hidden" id="edit-genre-id">
+                <input type="hidden" id="edit-genre-mode" value="edit">
+                
+                <!-- Genre Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input type="text" id="edit-genre-name" required
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <!-- Genre Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea id="edit-genre-description" rows="3" required
+                              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <!-- Genre Icon (Optional) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Icon URL (Optional)</label>
+                    <div class="flex gap-2">
+                        <input type="url" id="edit-genre-icon-url"
+                               class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="dashboardManager.uploadImage('genre-icon')"
+                                class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-upload"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Featured Status -->
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="edit-genre-featured"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Featured</span>
+                    </label>
+                </div>
+                
+                <!-- Buttons -->
+                <div class="flex space-x-2 pt-4">
+                    <button type="submit"
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        Save Changes
+                    </button>
+                    <button type="button"
+                            onclick="document.getElementById('edit-genre-modal').classList.add('hidden')"
+                            class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Subscription Modal -->
+    <div id="edit-subscription-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="subscription-modal-title" class="text-lg font-medium">Edit Subscription Plan</h3>
+                <button onclick="document.getElementById('edit-subscription-modal').classList.add('hidden')" 
+                        class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="edit-subscription-form" class="space-y-4">
+                <input type="hidden" id="edit-subscription-id">
+                <input type="hidden" id="edit-subscription-mode" value="edit">
+                
+                <!-- Plan Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Plan Name</label>
+                    <input type="text" id="edit-subscription-name" required
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <!-- Price -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
+                    <input type="number" id="edit-subscription-price" step="0.01" min="0" required
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <!-- Duration -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Duration</label>
+                        <input type="number" id="edit-subscription-duration" min="1" required
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Duration Type</label>
+                        <select id="edit-subscription-duration-type" required
+                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="day">Days</option>
+                            <option value="week">Weeks</option>
+                            <option value="month">Months</option>
+                            <option value="year">Years</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Stripe Product ID -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Stripe Product ID</label>
+                    <input type="text" id="edit-subscription-product-id"
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Stripe Price ID -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Stripe Price ID</label>
+                    <input type="text" id="edit-subscription-price-id"
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <!-- Features List -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Features (one per line)</label>
+                    <textarea id="edit-subscription-features" rows="4" 
+                              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <!-- Status -->
+                <div class="flex space-x-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="edit-subscription-active"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Active</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="edit-subscription-featured"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span class="ml-2 text-sm text-gray-700">Featured</span>
+                    </label>
+                </div>
+                
+                <!-- Buttons -->
+                <div class="flex space-x-2 pt-4">
+                    <button type="submit"
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        Save Changes
+                    </button>
+                    <button type="button"
+                            onclick="document.getElementById('edit-subscription-modal').classList.add('hidden')"
+                            class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Subscriber Detail Modal -->
+    <div id="subscriber-detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium">Subscriber Details</h3>
+                <button onclick="document.getElementById('subscriber-detail-modal').classList.add('hidden')" 
+                        class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="subscriber-detail-content" class="space-y-4">
+                <!-- Subscriber details will be inserted here -->
+            </div>
+            <div class="flex space-x-2 pt-4">
+                <button onclick="dashboardManager.updateSubscriptionStatus()"
+                        class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                    Manage Subscription
+                </button>
+                <button onclick="document.getElementById('subscriber-detail-modal').classList.add('hidden')"
+                        class="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
