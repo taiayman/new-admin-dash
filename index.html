@@ -10,14 +10,42 @@
     <script src="https://upload-widget.cloudinary.com/global/all.js"></script>
     <style>
         .active-tab { background-color: #1d4ed8; }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+            .table-responsive {
+                display: block;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .sidebar-open {
+                transform: translateX(0);
+                transition: transform 0.3s ease-in-out;
+            }
+            
+            .sidebar-closed {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100">
-    <div class="flex h-screen">
+    <div class="flex flex-col md:flex-row h-screen relative">
+        <!-- Mobile Menu Toggle -->
+        <button id="sidebar-toggle" class="md:hidden fixed top-4 left-4 z-50 bg-blue-600 text-white p-2 rounded-lg shadow-lg">
+            <i class="fas fa-bars"></i>
+        </button>
+        
         <!-- Sidebar -->
-        <div class="w-64 bg-white shadow-lg">
-            <div class="p-4 border-b">
+        <div id="sidebar" class="w-64 bg-white shadow-lg fixed md:static inset-y-0 left-0 z-40 sidebar-closed md:sidebar-open md:transform-none">
+            <div class="p-4 border-b flex justify-between items-center">
                 <h1 class="text-xl font-bold">Admin Panel</h1>
+                <button id="close-sidebar" class="md:hidden text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <nav class="p-4">
                 <button onclick="handleTabSwitch(this, 'users')" data-tab="users" 
@@ -44,29 +72,29 @@
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 overflow-auto">
+        <div class="flex-1 overflow-auto md:ml-0 w-full">
             <!-- Stats Row -->
-            <div class="p-6 grid grid-cols-4 gap-4">
-                <div class="bg-white p-4 rounded shadow">
-                    <div class="text-sm text-gray-500">Users</div>
-                    <div id="total-users" class="text-2xl font-bold">0</div>
+            <div class="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-12 md:mt-0">
+                <div class="bg-white p-3 md:p-4 rounded shadow">
+                    <div class="text-xs md:text-sm text-gray-500">Users</div>
+                    <div id="total-users" class="text-lg md:text-2xl font-bold">0</div>
                 </div>
-                <div class="bg-white p-4 rounded shadow">
-                    <div class="text-sm text-gray-500">Books</div>
-                    <div id="total-books" class="text-2xl font-bold">0</div>
+                <div class="bg-white p-3 md:p-4 rounded shadow">
+                    <div class="text-xs md:text-sm text-gray-500">Books</div>
+                    <div id="total-books" class="text-lg md:text-2xl font-bold">0</div>
                 </div>
-                <div class="bg-white p-4 rounded shadow">
-                    <div class="text-sm text-gray-500">Active Readers</div>
-                    <div id="active-readers" class="text-2xl font-bold">0</div>
+                <div class="bg-white p-3 md:p-4 rounded shadow">
+                    <div class="text-xs md:text-sm text-gray-500">Active Readers</div>
+                    <div id="active-readers" class="text-lg md:text-2xl font-bold">0</div>
                 </div>
-                <div class="bg-white p-4 rounded shadow">
-                    <div class="text-sm text-gray-500">Active Subscriptions</div>
-                    <div id="active-subscriptions" class="text-2xl font-bold">0</div>
+                <div class="bg-white p-3 md:p-4 rounded shadow">
+                    <div class="text-xs md:text-sm text-gray-500">Active Subscriptions</div>
+                    <div id="active-subscriptions" class="text-lg md:text-2xl font-bold">0</div>
                 </div>
             </div>
 
             <!-- Main Content Area -->
-            <div class="px-6 pb-6">
+            <div class="px-4 md:px-6 pb-6">
                 <div class="bg-white rounded shadow">
                     <!-- Search -->
                     <div class="p-4 border-b">
@@ -77,92 +105,108 @@
                     </div>
 
                     <!-- Tables -->
-                    <div class="p-4">
+                    <div class="p-4 overflow-x-auto">
                         <!-- Users Table -->
                         <div id="users-content" class="tab-content">
-                            <table class="w-full">
-                                <thead class="border-b">
-                                    <tr>
-                                        <th class="text-left py-2">Name</th>
-                                        <th class="text-left py-2">Email</th>
-                                        <th class="text-left py-2">Status</th>
-                                        <th class="text-right py-2">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-table"></tbody>
-                            </table>
+                            <div class="table-responsive">
+                                <table class="w-full min-w-[640px]">
+                                    <thead class="border-b">
+                                        <tr>
+                                            <th class="text-left py-2">Name</th>
+                                            <th class="text-left py-2 hidden md:table-cell">Email</th>
+                                            <th class="text-left py-2">Status</th>
+                                            <th class="text-right py-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table"></tbody>
+                                </table>
+                            </div>
                         </div>
 
                         <!-- Books Table -->
                         <div id="books-content" class="tab-content hidden">
                             <div class="mb-4 flex justify-end">
                                 <button onclick="dashboardManager.addBook()" 
-                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                                    <i class="fas fa-plus mr-2"></i>Add Book
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 md:px-4 md:py-2 text-sm md:text-base rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i><span class="hidden sm:inline">Add Book</span><span class="sm:hidden">Add</span>
                                 </button>
                             </div>
-                            <table class="w-full">
-                                <thead class="border-b">
-                                    <tr>
-                                        <th class="text-left py-2">Title</th>
-                                        <th class="text-left py-2">Author</th>
-                                        <th class="text-left py-2">Genre</th>
-                                        <th class="text-right py-2">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="books-table"></tbody>
-                            </table>
+                            <div class="table-responsive">
+                                <table class="w-full min-w-[640px]">
+                                    <thead class="border-b">
+                                        <tr>
+                                            <th class="text-left py-2">Title</th>
+                                            <th class="text-left py-2">Author</th>
+                                            <th class="text-left py-2">Genre</th>
+                                            <th class="text-right py-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="books-table"></tbody>
+                                </table>
+                            </div>
                         </div>
 
                         <!-- Genres Table -->
                         <div id="genres-content" class="tab-content hidden">
                             <div class="mb-4 flex justify-end">
                                 <button onclick="dashboardManager.addGenre()"
-                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                                    <i class="fas fa-plus mr-2"></i>Add Genre
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 md:px-4 md:py-2 text-sm md:text-base rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i><span class="hidden sm:inline">Add Genre</span><span class="sm:hidden">Add</span>
                                 </button>
                             </div>
-                            <table class="w-full">
-                                <thead class="border-b">
-                                    <tr>
-                                        <th class="text-left py-2">Name</th>
-                                        <th class="text-left py-2">Description</th>
-                                        <th class="text-left py-2">Books</th>
-                                        <th class="text-right py-2">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="genres-table"></tbody>
-                            </table>
+                            <div class="table-responsive">
+                                <table class="w-full min-w-[640px]">
+                                    <thead class="border-b">
+                                        <tr>
+                                            <th class="text-left py-2">Name</th>
+                                            <th class="text-left py-2">Description</th>
+                                            <th class="text-left py-2">Books</th>
+                                            <th class="text-right py-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="genres-table"></tbody>
+                                </table>
+                            </div>
                         </div>
 
                         <!-- Reading States Table -->
                         <div id="reading-content" class="tab-content hidden">
-                            <table class="w-full">
-                                <thead class="border-b">
-                                    <tr>
-                                        <th class="text-left py-2">User</th>
-                                        <th class="text-left py-2">Book</th>
-                                        <th class="text-left py-2">Progress</th>
-                                        <th class="text-right py-2">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="reading-table"></tbody>
-                            </table>
+                            <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
+                                <h3 class="text-lg font-semibold">Reading States</h3>
+                                <div class="flex space-x-2">
+                                    <button id="refreshReadingBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 md:px-4 md:py-2 text-sm md:text-base rounded-lg">
+                                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="w-full min-w-[640px]">
+                                    <thead class="border-b">
+                                        <tr>
+                                            <th class="text-left py-2">User</th>
+                                            <th class="text-left py-2">Book</th>
+                                            <th class="text-left py-2">Progress</th>
+                                            <th class="text-right py-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="reading-table"></tbody>
+                                </table>
+                            </div>
                         </div>
 
                         <!-- Subscription Management -->
                         <div id="subscriptions-content" class="tab-content hidden">
-                            <div class="mb-4 flex justify-between">
+                            <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
                                 <h2 class="text-xl font-bold">Subscription Plans</h2>
                                 <button onclick="dashboardManager.addSubscriptionPlan()" 
-                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                                    <i class="fas fa-plus mr-2"></i>Add Plan
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 md:px-4 md:py-2 text-sm md:text-base rounded-lg">
+                                    <i class="fas fa-plus mr-2"></i><span class="hidden sm:inline">Add Plan</span><span class="sm:hidden">Add</span>
                                 </button>
                             </div>
                             
                             <!-- Plans Table -->
-                            <div class="mb-8">
-                                <table class="w-full">
+                            <div class="mb-8 table-responsive">
+                                <table class="w-full min-w-[768px]">
                                     <thead class="border-b">
                                         <tr>
                                             <th class="text-left py-2">Name</th>
@@ -179,25 +223,27 @@
                             
                             <h2 class="text-xl font-bold mt-8 mb-4">Subscriber List</h2>
                             <!-- Subscribers Table -->
-                            <table class="w-full">
-                                <thead class="border-b">
-                                    <tr>
-                                        <th class="text-left py-2">User</th>
-                                        <th class="text-left py-2">Plan</th>
-                                        <th class="text-left py-2">Start Date</th>
-                                        <th class="text-left py-2">End Date</th>
-                                        <th class="text-left py-2">Status</th>
-                                        <th class="text-right py-2">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="subscribers-table"></tbody>
-                            </table>
+                            <div class="table-responsive">
+                                <table class="w-full min-w-[768px]">
+                                    <thead class="border-b">
+                                        <tr>
+                                            <th class="text-left py-2">User</th>
+                                            <th class="text-left py-2">Plan</th>
+                                            <th class="text-left py-2">Start Date</th>
+                                            <th class="text-left py-2">End Date</th>
+                                            <th class="text-left py-2">Status</th>
+                                            <th class="text-right py-2">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subscribers-table"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Charts -->
-                <div class="grid grid-cols-2 gap-4 mt-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                     <div class="bg-white p-4 rounded shadow">
                         <canvas id="user-activity-chart"></canvas>
                     </div>
@@ -210,8 +256,8 @@
     </div>
 
     <!-- Edit Book Modal -->
-    <div id="edit-book-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div id="edit-book-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-4 md:p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 id="book-modal-title" class="text-lg font-medium">Edit Book</h3>
                 <button onclick="document.getElementById('edit-book-modal').classList.add('hidden')" 
@@ -415,12 +461,22 @@
         window.addEventListener('load', () => {
             const firstTab = document.querySelector('[data-tab="users"]');
             window.handleTabSwitch(firstTab, 'users');
+            
+            // Initialize sidebar state based on screen size
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth >= 768) {
+                sidebar.classList.remove('sidebar-closed');
+                sidebar.classList.add('sidebar-open');
+            } else {
+                sidebar.classList.remove('sidebar-open');
+                sidebar.classList.add('sidebar-closed');
+            }
         });
     </script>
 
     <!-- Edit Genre Modal -->
-    <div id="edit-genre-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+    <div id="edit-genre-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-4 md:p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 id="genre-modal-title" class="text-lg font-medium">Edit Genre</h3>
                 <button onclick="document.getElementById('edit-genre-modal').classList.add('hidden')"
@@ -485,8 +541,8 @@
     </div>
 
     <!-- Edit Subscription Modal -->
-    <div id="edit-subscription-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+    <div id="edit-subscription-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-4 md:p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 id="subscription-modal-title" class="text-lg font-medium">Edit Subscription Plan</h3>
                 <button onclick="document.getElementById('edit-subscription-modal').classList.add('hidden')" 
@@ -583,8 +639,8 @@
     </div>
 
     <!-- Subscriber Detail Modal -->
-    <div id="subscriber-detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+    <div id="subscriber-detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-4 md:p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-medium">Subscriber Details</h3>
                 <button onclick="document.getElementById('subscriber-detail-modal').classList.add('hidden')" 
@@ -595,7 +651,7 @@
             <div id="subscriber-detail-content" class="space-y-4">
                 <!-- Subscriber details will be inserted here -->
             </div>
-            <div class="flex space-x-2 pt-4">
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
                 <button onclick="dashboardManager.updateSubscriptionStatus()"
                         class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
                     Manage Subscription
@@ -607,5 +663,73 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile Sidebar JavaScript -->
+    <script>
+        // Mobile sidebar toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const closeSidebar = document.getElementById('close-sidebar');
+            
+            // Function to open sidebar
+            function openSidebar() {
+                sidebar.classList.remove('sidebar-closed');
+                sidebar.classList.add('sidebar-open');
+            }
+            
+            // Function to close sidebar
+            function closeSidebarMenu() {
+                sidebar.classList.remove('sidebar-open');
+                sidebar.classList.add('sidebar-closed');
+            }
+            
+            // Toggle sidebar on button click
+            sidebarToggle.addEventListener('click', openSidebar);
+            closeSidebar.addEventListener('click', closeSidebarMenu);
+            
+            // Close sidebar when clicking on a tab (on mobile)
+            const tabButtons = document.querySelectorAll('[data-tab]');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    if (window.innerWidth < 768) {
+                        closeSidebarMenu();
+                    }
+                });
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                if (window.innerWidth >= 768) {
+                    sidebar.classList.remove('sidebar-closed');
+                    sidebar.classList.add('sidebar-open');
+                } else {
+                    sidebar.classList.remove('sidebar-open');
+                    sidebar.classList.add('sidebar-closed');
+                }
+            });
+        });
+        
+        // Tab switching functionality
+        window.handleTabSwitch = function(element, tabName) {
+            // Remove active class from all tabs
+            document.querySelectorAll('[data-tab]').forEach(tab => {
+                tab.classList.remove('active-tab', 'text-white');
+                tab.classList.add('hover:bg-gray-100');
+            });
+            
+            // Add active class to clicked tab
+            element.classList.add('active-tab', 'text-white');
+            element.classList.remove('hover:bg-gray-100');
+            
+            // Hide all content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Show selected content
+            document.getElementById(tabName + '-content').classList.remove('hidden');
+        };
+    </script>
 </body>
 </html>
