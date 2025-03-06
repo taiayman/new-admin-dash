@@ -34,7 +34,12 @@ const booksRef = collection(db, 'books');
 const genresRef = collection(db, 'academic_genres');
 const getReadingStatesRef = (userId) => {
     if (!userId) return null;
-    return collection(db, 'readingStates', userId, 'books');
+    try {
+        return collection(db, 'readingStates', userId, 'books');
+    } catch (error) {
+        console.error('Error creating reading states reference:', error);
+        return null;
+    }
 };
 const subscriptionPlansRef = collection(db, 'subscription_plans');
 const subscriptionsRef = collection(db, 'subscriptions');
@@ -153,10 +158,15 @@ class DashboardManager {
 
                 tbody.innerHTML += `
                     <tr class="border-b hover:bg-gray-50">
-                        <td class="py-3">${displayName}</td>
-                        <td class="py-3">${email}</td>
                         <td class="py-3">
-                            <span class="px-2 py-1 text-sm rounded-full ${
+                            <div class="flex flex-col">
+                                <span class="font-medium">${displayName}</span>
+                                <span class="text-xs text-gray-500 md:hidden">${email}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 hidden md:table-cell">${email}</td>
+                        <td class="py-3">
+                            <span class="px-2 py-1 text-xs md:text-sm rounded-full ${
                                 status === 'active' || status === 'onboarding_completed' ? 'bg-green-100 text-green-800' :
                                 status === 'inactive' ? 'bg-gray-100 text-gray-800' :
                                 'bg-yellow-100 text-yellow-800'
@@ -165,17 +175,17 @@ class DashboardManager {
                             </span>
                         </td>
                         <td class="py-3 text-right">
-                            <div class="flex justify-end space-x-2">
+                            <div class="flex justify-end space-x-1">
                                 <button onclick="dashboardManager.viewUser('${doc.id}')" 
-                                        class="text-blue-600 hover:text-blue-800 px-2">
+                                        class="p-1 md:p-2 text-blue-600 hover:bg-blue-100 rounded-full">
                                     <i class="fas fa-eye"></i>
                                 </button>
                                 <button onclick="dashboardManager.editUser('${doc.id}')" 
-                                        class="text-green-600 hover:text-green-800 px-2">
+                                        class="p-1 md:p-2 text-yellow-600 hover:bg-yellow-100 rounded-full">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button onclick="dashboardManager.deleteUser('${doc.id}')" 
-                                        class="text-red-600 hover:text-red-800 px-2">
+                                        class="p-1 md:p-2 text-red-600 hover:bg-red-100 rounded-full">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -311,36 +321,82 @@ class DashboardManager {
             const usersSnapshot = await getDocs(usersRef);
             const readingStates = [];
 
+            console.log(`Found ${usersSnapshot.docs.length} users to check for reading states`);
+
             // For each user, get their reading states
             for (const userDoc of usersSnapshot.docs) {
                 const userId = userDoc.id;
                 const userReadingStatesRef = getReadingStatesRef(userId);
-                const userReadingStatesSnapshot = await getDocs(query(
-                    userReadingStatesRef,
-                    orderBy('lastReadAt', 'desc'),
-                    limit(5) // Limit per user to avoid too many reads
-                ));
+                
+                if (!userReadingStatesRef) {
+                    console.log(`No reading states reference for user: ${userId}`);
+                    continue;
+                }
+                
+                try {
+                    const userReadingStatesSnapshot = await getDocs(query(
+                        userReadingStatesRef,
+                        orderBy('lastReadAt', 'desc'),
+                        limit(5) // Limit per user to avoid too many reads
+                    ));
 
-                // Add each reading state with user info
-                for (const stateDoc of userReadingStatesSnapshot.docs) {
-                    readingStates.push({
-                        id: stateDoc.id,
-                        userId: userId,
-                        userData: userDoc.data(),
-                        ...stateDoc.data()
-                    });
+                    console.log(`Found ${userReadingStatesSnapshot.docs.length} reading states for user ${userId}`);
+
+                    // Add each reading state with user info
+                    for (const stateDoc of userReadingStatesSnapshot.docs) {
+                        const stateData = stateDoc.data();
+                        console.log(`Reading state data for ${stateDoc.id}:`, stateData);
+                        
+                        // Use document ID as bookId if missing
+                        const bookId = stateData.bookId || stateDoc.id;
+                        
+                        // Skip if missing lastReadAt
+                        if (!stateData.lastReadAt) {
+                            console.log(`Skipping reading state with missing lastReadAt: ${stateDoc.id}`);
+                            continue;
+                        }
+                        
+                        // Normalize progress value
+                        let progress = stateData.progress;
+                        if (progress === undefined) {
+                            // Try to use readingProgress if progress is missing
+                            progress = stateData.readingProgress;
+                            if (progress === undefined) {
+                                // Default to 0 if no progress information is available
+                                progress = 0;
+                            }
+                        }
+                        
+                        readingStates.push({
+                            id: stateDoc.id,
+                            userId: userId,
+                            userData: userDoc.data(),
+                            bookId: bookId,
+                            progress: progress,
+                            lastReadAt: stateData.lastReadAt,
+                            currentPage: stateData.currentPage || 0,
+                            isReading: stateData.isReading || false,
+                            ...stateData
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error fetching reading states for user ${userId}:`, error);
                 }
             }
 
             // Sort all reading states by lastReadAt
             readingStates.sort((a, b) => {
-                const dateA = a.lastReadAt?.toDate?.() || new Date(a.lastReadAt);
-                const dateB = b.lastReadAt?.toDate?.() || new Date(b.lastReadAt);
+                // Handle different timestamp formats (Firestore Timestamp or string date)
+                const dateA = a.lastReadAt?.toDate ? a.lastReadAt.toDate() : 
+                             (a.lastReadAt ? new Date(a.lastReadAt) : new Date(0));
+                const dateB = b.lastReadAt?.toDate ? b.lastReadAt.toDate() : 
+                             (b.lastReadAt ? new Date(b.lastReadAt) : new Date(0));
                 return dateB - dateA;
             });
 
             // Take only the most recent 20 states
             const recentStates = readingStates.slice(0, 20);
+            console.log(`Total reading states after processing: ${recentStates.length}`);
 
             const tbody = document.getElementById('reading-table');
             tbody.innerHTML = '';
@@ -361,7 +417,7 @@ class DashboardManager {
                     // Get book data
                     const bookQuery = query(booksRef, where('id', '==', state.bookId));
                     const bookSnapshot = await getDocs(bookQuery);
-                    const bookData = bookSnapshot.docs[0]?.data() || { title: 'Unknown Book' };
+                    const bookData = bookSnapshot.docs[0]?.data() || { title: `(ID: ${state.bookId})` };
 
                     // Format the date
                     const lastReadDate = state.lastReadAt ? 
@@ -376,40 +432,51 @@ class DashboardManager {
                     // Calculate progress
                     const progress = state.progress || 0;
                     const progressPercentage = typeof progress === 'number' ? 
-                        progress : 
+                        Math.min(100, Math.max(0, progress * 100)) : // Convert 0-1 to percentage and clamp
                         (parseFloat(progress) || 0);
 
                     // Get user name from userData we already have
                     const userName = state.userData.full_name || 
                                    state.userData.name || 
                                    state.userData.displayName || 
+                                   state.userData.email ||
                                    'Unknown User';
 
                     tbody.innerHTML += `
                         <tr class="border-b hover:bg-gray-50">
-                            <td class="py-3">${userName}</td>
-                            <td class="py-3">${bookData.title}</td>
+                            <td class="py-3">
+                                <div class="flex flex-col">
+                                    <span class="font-medium">${userName}</span>
+                                    <span class="text-xs text-gray-500 md:hidden">${formattedDate}</span>
+                                </div>
+                            </td>
+                            <td class="py-3">
+                                <div class="flex flex-col">
+                                    <span>${bookData.title}</span>
+                                    <span class="text-xs text-gray-500 md:hidden">ID: ${state.bookId}</span>
+                                </div>
+                            </td>
                             <td class="py-3">
                                 <div class="flex items-center">
-                                    <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="w-16 md:w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                                         <div class="h-full bg-blue-500" style="width: ${progressPercentage}%"></div>
                                     </div>
-                                    <span class="ml-2 text-sm text-gray-600">${progressPercentage.toFixed(1)}%</span>
+                                    <span class="ml-2 text-xs md:text-sm text-gray-600">${progressPercentage.toFixed(1)}%</span>
                                 </div>
-                                <div class="text-xs text-gray-500 mt-1">Last read: ${formattedDate}</div>
+                                <div class="text-xs text-gray-500 mt-1 hidden md:block">Last read: ${formattedDate}</div>
                             </td>
                             <td class="py-3 text-right">
-                                <div class="flex justify-end space-x-2">
-                                    <button onclick="dashboardManager.viewReadingState('${state.id}', '${state.userId}')" 
-                                            class="text-blue-600 hover:text-blue-800 px-2">
+                                <div class="flex justify-end space-x-1">
+                                    <button onclick="dashboardManager.viewReadingState('${state.id}', '${state.userId}')"
+                                            class="p-1 md:p-2 text-blue-600 hover:bg-blue-100 rounded-full">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button onclick="dashboardManager.editReadingState('${state.id}', '${state.userId}')" 
-                                            class="text-green-600 hover:text-green-800 px-2">
+                                    <button onclick="dashboardManager.editReadingState('${state.id}', '${state.userId}')"
+                                            class="p-1 md:p-2 text-yellow-600 hover:bg-yellow-100 rounded-full">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button onclick="dashboardManager.deleteReadingState('${state.id}', '${state.userId}')" 
-                                            class="text-red-600 hover:text-red-800 px-2">
+                                    <button onclick="dashboardManager.deleteReadingState('${state.id}', '${state.userId}')"
+                                            class="p-1 md:p-2 text-red-600 hover:bg-red-100 rounded-full">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -742,6 +809,15 @@ class DashboardManager {
     }
 
     setupEventListeners() {
+        // Tab navigation
+        document.querySelectorAll('.nav-link').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tabId = tab.getAttribute('data-tab');
+                this.switchTab(tabId);
+            });
+        });
+
         // Search functionality
         document.getElementById('search-input').addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
@@ -775,6 +851,10 @@ class DashboardManager {
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
             this.filterContent(searchTerm);
         };
+
+        // Reading tab buttons
+        document.getElementById('refreshReadingBtn')?.addEventListener('click', () => this.loadReadingStates());
+        document.getElementById('fixReadingBtn')?.addEventListener('click', () => this.fixReadingStates());
     }
 
     filterContent(searchTerm) {
@@ -1242,35 +1322,79 @@ class DashboardManager {
     async viewReadingState(stateId, userId) {
         try {
             const stateDoc = await getDoc(doc(getReadingStatesRef(userId), stateId));
+            
             if (stateDoc.exists()) {
-                const state = stateDoc.data();
+                const stateData = stateDoc.data();
+                
+                // Use document ID as bookId if missing
+                const bookId = stateData.bookId || stateDoc.id;
                 
                 // Get book data
-                const bookQuery = query(booksRef, where('id', '==', state.bookId));
-                const bookSnapshot = await getDocs(bookQuery);
-                const bookData = bookSnapshot.docs[0]?.data() || { title: 'Unknown Book' };
+                let bookTitle = `(ID: ${bookId})`;
+                try {
+                    const bookQuery = query(booksRef, where('id', '==', bookId));
+                    const bookSnapshot = await getDocs(bookQuery);
+                    if (bookSnapshot.docs.length > 0) {
+                        bookTitle = bookSnapshot.docs[0].data().title;
+                    }
+                } catch (error) {
+                    console.error('Error fetching book details:', error);
+                }
                 
                 // Get user data
-                const userDoc = await getDoc(doc(usersRef, userId));
-                const userData = userDoc.data() || {};
-                const userName = userData.full_name || userData.name || userData.displayName || 'Unknown User';
+                let userName = 'Unknown User';
+                try {
+                    const userDoc = await getDoc(doc(usersRef, userId));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        userName = userData.full_name || userData.name || userData.displayName || userData.email || 'Unknown User';
+                    }
+                } catch (error) {
+                    console.error('Error fetching user details:', error);
+                }
                 
-                // Format date
-                const lastReadAt = state.lastReadAt ? 
-                    (state.lastReadAt.toDate ? state.lastReadAt.toDate() : new Date(state.lastReadAt))
-                    : null;
-                const formattedLastReadAt = lastReadAt ? lastReadAt.toLocaleString() : 'N/A';
+                // Format the date
+                const lastReadDate = stateData.lastReadAt ? 
+                    (stateData.lastReadAt.toDate ? stateData.lastReadAt.toDate() : new Date(stateData.lastReadAt))
+                    : new Date();
+                const formattedDate = lastReadDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
                 
-                const details = [
-                    `User: ${userName}`,
-                    `Book: ${bookData.title}`,
-                    `Progress: ${state.progress || 0}%`,
-                    `Current Page: ${state.currentPage || 0}`,
-                    `Last Read At: ${formattedLastReadAt}`,
-                    `Notes: ${state.notes ? state.notes.length : 0} note(s)`,
-                    `Bookmarks: ${state.bookmarks ? state.bookmarks.length : 0} bookmark(s)`
-                ].join('\n');
-
+                // Calculate progress percentage
+                let progress = stateData.progress;
+                if (progress === undefined) {
+                    // Try to use readingProgress if progress is missing
+                    progress = stateData.readingProgress;
+                    if (progress === undefined) {
+                        // Default to 0 if no progress information is available
+                        progress = 0;
+                    }
+                }
+                
+                const progressPercentage = typeof progress === 'number' ? 
+                    Math.min(100, Math.max(0, progress * 100)) : // Convert 0-1 to percentage and clamp
+                    (parseFloat(progress) || 0);
+                
+                // Format current page
+                const currentPage = stateData.currentPage || 'N/A';
+                
+                // Format additional details
+                const details = `
+User: ${userName}
+Book: ${bookTitle}
+Progress: ${progressPercentage.toFixed(1)}%
+Current Page: ${currentPage}
+Last Read: ${formattedDate}
+Book ID: ${bookId}
+Reading State ID: ${stateId}
+Document Data: ${JSON.stringify(stateData, null, 2)}
+                `;
+                
                 alert(`Reading State Details:\n${details}`);
             } else {
                 alert('Reading state not found');
@@ -1284,24 +1408,78 @@ class DashboardManager {
     async editReadingState(stateId, userId) {
         try {
             const stateDoc = await getDoc(doc(getReadingStatesRef(userId), stateId));
+            
             if (stateDoc.exists()) {
-                const state = stateDoc.data();
-                const newProgress = prompt('Enter new progress percentage (0-100):', state.progress || 0);
+                const stateData = stateDoc.data();
                 
-                if (newProgress !== null) {
-                    const progressValue = parseFloat(newProgress);
-                    if (!isNaN(progressValue) && progressValue >= 0 && progressValue <= 100) {
-                        await updateDoc(doc(getReadingStatesRef(userId), stateId), {
-                            progress: progressValue,
-                            updatedAt: serverTimestamp()
-                        });
-                        
-                        alert('Reading state updated successfully!');
-                        this.loadReadingStates();
-                    } else {
-                        alert('Invalid progress value. Please enter a number between 0 and 100.');
+                // Use document ID as bookId if missing
+                const bookId = stateData.bookId || stateDoc.id;
+                
+                // Get book data for reference
+                let bookTitle = `(ID: ${bookId})`;
+                try {
+                    const bookQuery = query(booksRef, where('id', '==', bookId));
+                    const bookSnapshot = await getDocs(bookQuery);
+                    if (bookSnapshot.docs.length > 0) {
+                        bookTitle = bookSnapshot.docs[0].data().title;
+                    }
+                } catch (error) {
+                    console.error('Error fetching book details:', error);
+                }
+                
+                // Calculate current progress percentage
+                let currentProgress = stateData.progress;
+                if (currentProgress === undefined) {
+                    // Try to use readingProgress if progress is missing
+                    currentProgress = stateData.readingProgress;
+                    if (currentProgress === undefined) {
+                        // Default to 0 if no progress information is available
+                        currentProgress = 0;
                     }
                 }
+                
+                const progressPercentage = typeof currentProgress === 'number' ? 
+                    Math.min(100, Math.max(0, currentProgress * 100)) : // Convert 0-1 to percentage and clamp
+                    (parseFloat(currentProgress) || 0);
+                
+                // Ask for new progress value
+                const newProgressStr = prompt(
+                    `Edit reading progress for "${bookTitle}"\n` +
+                    `Current progress: ${progressPercentage.toFixed(1)}%\n` +
+                    `Enter new progress (0-100%):`, 
+                    progressPercentage.toFixed(1)
+                );
+                
+                if (newProgressStr === null) {
+                    return; // User cancelled
+                }
+                
+                // Parse and validate new progress
+                const newProgressPercentage = parseFloat(newProgressStr);
+                if (isNaN(newProgressPercentage) || newProgressPercentage < 0 || newProgressPercentage > 100) {
+                    alert('Invalid progress value. Please enter a number between 0 and 100.');
+                    return;
+                }
+                
+                // Convert percentage back to 0-1 scale for storage
+                const newProgress = newProgressPercentage / 100;
+                
+                // Prepare update data
+                const updateData = {
+                    progress: newProgress,
+                    lastReadAt: serverTimestamp()
+                };
+                
+                // Add bookId if it was missing
+                if (!stateData.bookId) {
+                    updateData.bookId = bookId;
+                }
+                
+                // Update the reading state
+                await updateDoc(doc(getReadingStatesRef(userId), stateId), updateData);
+                
+                alert('Reading state updated successfully!');
+                this.loadReadingStates();
             } else {
                 alert('Reading state not found');
             }
@@ -1914,6 +2092,8 @@ class DashboardManager {
 
     getAudioFilesMap() {
         const container = document.getElementById('audio-files-container');
+        if (!container) return {};
+        
         const audioMap = {};
         
         Array.from(container.children).forEach(entry => {
@@ -1925,6 +2105,92 @@ class DashboardManager {
         });
         
         return audioMap;
+    }
+
+    // Fix reading states by adding missing fields
+    async fixReadingStates() {
+        try {
+            console.log("=== FIXING READING STATES ===");
+            
+            // Get all users
+            const usersSnapshot = await getDocs(usersRef);
+            console.log(`Found ${usersSnapshot.docs.length} users`);
+            
+            let totalFixed = 0;
+            let totalErrors = 0;
+            
+            // Check each user's reading states
+            for (const userDoc of usersSnapshot.docs) {
+                const userId = userDoc.id;
+                const userData = userDoc.data();
+                console.log(`Checking reading states for user: ${userId} (${userData.email || userData.name || 'Unknown'})`);
+                
+                const userReadingStatesRef = getReadingStatesRef(userId);
+                if (!userReadingStatesRef) {
+                    console.log(`  No reading states reference for user: ${userId}`);
+                    continue;
+                }
+                
+                try {
+                    const userReadingStatesSnapshot = await getDocs(userReadingStatesRef);
+                    console.log(`  Found ${userReadingStatesSnapshot.docs.length} reading states`);
+                    
+                    for (const stateDoc of userReadingStatesSnapshot.docs) {
+                        const stateData = stateDoc.data();
+                        const stateId = stateDoc.id;
+                        
+                        // Check for missing fields
+                        const updates = {};
+                        let needsUpdate = false;
+                        
+                        // Fix bookId if missing
+                        if (!stateData.bookId) {
+                            updates.bookId = stateId;
+                            needsUpdate = true;
+                        }
+                        
+                        // Fix progress if missing but readingProgress exists
+                        if (stateData.progress === undefined && stateData.readingProgress !== undefined) {
+                            updates.progress = stateData.readingProgress;
+                            needsUpdate = true;
+                        }
+                        
+                        // Fix userId if missing
+                        if (!stateData.userId) {
+                            updates.userId = userId;
+                            needsUpdate = true;
+                        }
+                        
+                        // Update the document if needed
+                        if (needsUpdate) {
+                            try {
+                                console.log(`  - Fixing reading state ${stateId} with updates:`, updates);
+                                await updateDoc(doc(userReadingStatesRef, stateId), updates);
+                                totalFixed++;
+                                console.log(`    ✓ Fixed successfully`);
+                            } catch (error) {
+                                console.error(`    ✗ Error updating reading state:`, error);
+                                totalErrors++;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error(`  Error fetching reading states for user ${userId}:`, error);
+                    totalErrors++;
+                }
+            }
+            
+            console.log(`=== FINISHED FIXING READING STATES ===`);
+            console.log(`Total fixed: ${totalFixed}, Total errors: ${totalErrors}`);
+            
+            alert(`Reading states fix completed!\nFixed: ${totalFixed}\nErrors: ${totalErrors}\n\nCheck console for details.`);
+            
+            // Reload reading states to show the fixed data
+            this.loadReadingStates();
+        } catch (error) {
+            console.error('Error fixing reading states:', error);
+            alert('Error fixing reading states: ' + error.message);
+        }
     }
 }
 
