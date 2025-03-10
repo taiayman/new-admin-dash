@@ -68,6 +68,10 @@
                         class="w-full text-left px-4 py-2 rounded mb-2 hover:bg-gray-100">
                     <i class="fas fa-credit-card mr-2"></i> Subscriptions
                 </button>
+                <button onclick="handleTabSwitch(this, 'notifications')" data-tab="notifications" 
+                        class="w-full text-left px-4 py-2 rounded mb-2 hover:bg-gray-100">
+                    <i class="fas fa-bell mr-2"></i> Notifications
+                </button>
             </nav>
         </div>
 
@@ -237,6 +241,137 @@
                                     </thead>
                                     <tbody id="subscribers-table"></tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <!-- Notifications Tab -->
+                        <div id="notifications-content" class="tab-content hidden">
+                            <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
+                                <h2 class="text-xl font-bold">Notifications</h2>
+                                <button onclick="dashboardManager.showSendNotificationForm()" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 md:px-4 md:py-2 text-sm md:text-base rounded-lg">
+                                    <i class="fas fa-paper-plane mr-2"></i><span class="hidden sm:inline">Send Notification</span><span class="sm:hidden">Send</span>
+                                </button>
+                            </div>
+                            
+                            <!-- Notification Form -->
+                            <div id="send-notification-form" class="bg-white p-6 rounded-lg shadow-md mb-6 hidden">
+                                <h3 class="text-lg font-semibold mb-4">Send Push Notification</h3>
+                                <form id="notification-form" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Notification Type</label>
+                                        <select id="notification-type" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="all">All Users</option>
+                                            <option value="topic">Topic Subscribers</option>
+                                            <option value="specific">Specific User</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div id="topic-selection" class="hidden">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Topic</label>
+                                        <select id="notification-topic" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="books">Books</option>
+                                            <option value="offers">Offers</option>
+                                            <option value="updates">Updates</option>
+                                            <option value="premium">Premium</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div id="user-selection" class="hidden">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Select User</label>
+                                        <select id="notification-user" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <!-- Will be populated with users -->
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                        <input type="text" id="notification-title" required
+                                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                               placeholder="Notification Title">
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                        <textarea id="notification-message" rows="3" required
+                                                  class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                  placeholder="Notification Message"></textarea>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Notification Category</label>
+                                        <select id="notification-category" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="welcome">Welcome</option>
+                                            <option value="featured">Featured Books</option>
+                                            <option value="premium">Premium Features</option>
+                                            <option value="book">New Book</option>
+                                            <option value="achievement">Achievement</option>
+                                            <option value="offer">Special Offer</option>
+                                            <option value="update">App Update</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Additional Data (Optional)</label>
+                                        <textarea id="notification-data" rows="3"
+                                                  class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                  placeholder='{"key": "value", "bookId": "123"}'></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">Enter valid JSON data for additional parameters</p>
+                                    </div>
+                                    
+                                    <div class="flex justify-end space-x-3">
+                                        <button type="button" onclick="dashboardManager.hideSendNotificationForm()"
+                                                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                            Cancel
+                                        </button>
+                                        <button type="submit"
+                                                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                            Send Notification
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            
+                            <!-- Recent Notifications Table -->
+                            <div class="mb-6">
+                                <h3 class="text-lg font-semibold mb-4">Recent Notifications</h3>
+                                <div class="table-responsive">
+                                    <table class="w-full min-w-[768px]">
+                                        <thead class="border-b">
+                                            <tr>
+                                                <th class="text-left py-2">Title</th>
+                                                <th class="text-left py-2">Type</th>
+                                                <th class="text-left py-2">Sent To</th>
+                                                <th class="text-left py-2">Date</th>
+                                                <th class="text-right py-2">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="notifications-table">
+                                            <!-- Will be populated with notifications -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- User Notification Tokens -->
+                            <div>
+                                <h3 class="text-lg font-semibold mb-4">User Notification Tokens</h3>
+                                <div class="table-responsive">
+                                    <table class="w-full min-w-[768px]">
+                                        <thead class="border-b">
+                                            <tr>
+                                                <th class="text-left py-2">User</th>
+                                                <th class="text-left py-2">Device</th>
+                                                <th class="text-left py-2">Token</th>
+                                                <th class="text-left py-2">Last Updated</th>
+                                                <th class="text-right py-2">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="notification-tokens-table">
+                                            <!-- Will be populated with user tokens -->
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -459,18 +594,21 @@
     <script>
         // Initialize first tab after scripts are loaded
         window.addEventListener('load', () => {
-            const firstTab = document.querySelector('[data-tab="users"]');
-            window.handleTabSwitch(firstTab, 'users');
-            
-            // Initialize sidebar state based on screen size
-            const sidebar = document.getElementById('sidebar');
-            if (window.innerWidth >= 768) {
-                sidebar.classList.remove('sidebar-closed');
-                sidebar.classList.add('sidebar-open');
-            } else {
-                sidebar.classList.remove('sidebar-open');
-                sidebar.classList.add('sidebar-closed');
-            }
+            // Give a small delay to ensure dashboardManager is initialized
+            setTimeout(() => {
+                const firstTab = document.querySelector('[data-tab="users"]');
+                window.handleTabSwitch(firstTab, 'users');
+                
+                // Initialize sidebar state based on screen size
+                const sidebar = document.getElementById('sidebar');
+                if (window.innerWidth >= 768) {
+                    sidebar.classList.remove('sidebar-closed');
+                    sidebar.classList.add('sidebar-open');
+                } else {
+                    sidebar.classList.remove('sidebar-open');
+                    sidebar.classList.add('sidebar-closed');
+                }
+            }, 100);
         });
     </script>
 
@@ -709,27 +847,6 @@
                 }
             });
         });
-        
-        // Tab switching functionality
-        window.handleTabSwitch = function(element, tabName) {
-            // Remove active class from all tabs
-            document.querySelectorAll('[data-tab]').forEach(tab => {
-                tab.classList.remove('active-tab', 'text-white');
-                tab.classList.add('hover:bg-gray-100');
-            });
-            
-            // Add active class to clicked tab
-            element.classList.add('active-tab', 'text-white');
-            element.classList.remove('hover:bg-gray-100');
-            
-            // Hide all content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            
-            // Show selected content
-            document.getElementById(tabName + '-content').classList.remove('hidden');
-        };
     </script>
 </body>
 </html>
