@@ -3,6 +3,7 @@ import { getFirestore, collection, query, where, getDocs, onSnapshot,
          addDoc, updateDoc, deleteDoc, doc, orderBy, limit, Timestamp, 
          serverTimestamp, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js';
 
 // Firebase Configuration
 const firebaseConfig = {
@@ -19,6 +20,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// Initialize Firebase Functions
+const functions = getFunctions(app);
+const sendNotification = httpsCallable(functions, 'sendNotification');
+
 // Cloudinary Configuration
 const cloudinaryConfig = {
     cloudName: 'dydhel38x',
@@ -32,6 +37,7 @@ const cloudinaryConfig = {
 const usersRef = collection(db, 'users');
 const booksRef = collection(db, 'books');
 const genresRef = collection(db, 'academic_genres');
+const notificationsRef = collection(db, 'notifications');
 const getReadingStatesRef = (userId) => {
     if (!userId) return null;
     try {
@@ -41,7 +47,7 @@ const getReadingStatesRef = (userId) => {
         return null;
     }
 };
-const subscriptionPlansRef = collection(db, 'subscription_plans');
+const subscriptionPlansRef = collection(db, 'subscriptionPlans');
 const subscriptionsRef = collection(db, 'subscriptions');
 
 // Utility Functions
@@ -87,6 +93,8 @@ class DashboardManager {
             this.loadReadingStates(),
             this.loadSubscriptionPlans(),
             this.loadSubscribers(),
+            this.loadNotifications(),
+            this.loadNotificationTokens(),
             this.updateCharts()
         ]);
     }
@@ -153,8 +161,13 @@ class DashboardManager {
                 const user = doc.data();
                 const displayName = user.full_name || user.name || user.displayName || 'N/A';
                 const email = user.email || 'N/A';
-                const status = user.onboarding_step === 'onboarding_completed' ? 'active' : 
+                let status = user.onboarding_step === 'onboarding_completed' ? 'active' : 
                              user.onboarding_step || user.status || 'pending';
+                
+                // Check if user account is disabled
+                if (user.isDisabled === true) {
+                    status = 'blocked';
+                }
 
                 tbody.innerHTML += `
                     <tr class="border-b hover:bg-gray-50">
@@ -169,6 +182,7 @@ class DashboardManager {
                             <span class="px-2 py-1 text-xs md:text-sm rounded-full ${
                                 status === 'active' || status === 'onboarding_completed' ? 'bg-green-100 text-green-800' :
                                 status === 'inactive' ? 'bg-gray-100 text-gray-800' :
+                                status === 'blocked' ? 'bg-red-100 text-red-800' :
                                 'bg-yellow-100 text-yellow-800'
                             }">
                                 ${status === 'onboarding_completed' ? 'active' : status}
@@ -183,6 +197,11 @@ class DashboardManager {
                                 <button onclick="dashboardManager.editUser('${doc.id}')" 
                                         class="p-1 md:p-2 text-yellow-600 hover:bg-yellow-100 rounded-full">
                                     <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="dashboardManager.toggleUserStatus('${doc.id}', ${user.isDisabled === true})" 
+                                        class="px-2 py-1 md:px-3 md:py-2 rounded ${user.isDisabled ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'} flex items-center">
+                                    <i class="fas ${user.isDisabled ? 'fa-unlock' : 'fa-ban'} mr-1"></i>
+                                    <span class="text-xs md:text-sm">${user.isDisabled ? 'Unblock' : 'Block'}</span>
                                 </button>
                                 <button onclick="dashboardManager.deleteUser('${doc.id}')" 
                                         class="p-1 md:p-2 text-red-600 hover:bg-red-100 rounded-full">
@@ -855,6 +874,29 @@ class DashboardManager {
         // Reading tab buttons
         document.getElementById('refreshReadingBtn')?.addEventListener('click', () => this.loadReadingStates());
         document.getElementById('fixReadingBtn')?.addEventListener('click', () => this.fixReadingStates());
+
+        // Notification type change event
+        document.getElementById('notification-type').addEventListener('change', (e) => {
+            const type = e.target.value;
+            const topicSelection = document.getElementById('topic-selection');
+            const userSelection = document.getElementById('user-selection');
+            
+            topicSelection.classList.add('hidden');
+            userSelection.classList.add('hidden');
+            
+            if (type === 'topic') {
+                topicSelection.classList.remove('hidden');
+            } else if (type === 'specific') {
+                userSelection.classList.remove('hidden');
+                this.populateUserDropdown();
+            }
+        });
+        
+        // Notification form submission
+        document.getElementById('notification-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.sendNotification();
+        });
     }
 
     filterContent(searchTerm) {
@@ -950,6 +992,28 @@ class DashboardManager {
                 console.error('Error deleting user:', error);
                 alert('Error deleting user');
             }
+        }
+    }
+
+    async toggleUserStatus(userId, isCurrentlyDisabled) {
+        try {
+            const action = isCurrentlyDisabled ? 'enable' : 'disable';
+            const message = isCurrentlyDisabled ? 
+                'Are you sure you want to enable this account? The user will be able to log in again.' : 
+                'Are you sure you want to disable this account? The user will not be able to log in and will see a message to contact support.';
+                
+            if (confirm(message)) {
+                await updateDoc(doc(usersRef, userId), {
+                    isDisabled: !isCurrentlyDisabled,
+                    updatedAt: serverTimestamp()
+                });
+                
+                alert(`User account ${action}d successfully`);
+                this.loadUsers();
+            }
+        } catch (error) {
+            console.error('Error toggling user status:', error);
+            alert('Error toggling user status');
         }
     }
 
@@ -2190,6 +2254,450 @@ Document Data: ${JSON.stringify(stateData, null, 2)}
         } catch (error) {
             console.error('Error fixing reading states:', error);
             alert('Error fixing reading states: ' + error.message);
+        }
+    }
+
+    // Notification Methods
+    async loadNotifications() {
+        try {
+            const notificationsQuery = query(notificationsRef, orderBy('createdAt', 'desc'), limit(20));
+            const snapshot = await getDocs(notificationsQuery);
+            
+            const notificationsTable = document.getElementById('notifications-table');
+            if (!notificationsTable) return;
+            
+            notificationsTable.innerHTML = '';
+            
+            if (snapshot.empty) {
+                notificationsTable.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-4 text-center text-gray-500">No notifications found</td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            snapshot.forEach(doc => {
+                const notification = doc.data();
+                const row = document.createElement('tr');
+                
+                let sentTo = 'All Users';
+                if (notification.topic) {
+                    sentTo = `Topic: ${notification.topic}`;
+                } else if (notification.userId) {
+                    sentTo = `User: ${notification.userName || notification.userId}`;
+                }
+                
+                row.innerHTML = `
+                    <td class="py-2">${notification.title || 'No Title'}</td>
+                    <td class="py-2">${notification.type || 'N/A'}</td>
+                    <td class="py-2">${sentTo}</td>
+                    <td class="py-2">${notification.createdAt ? formatDate(notification.createdAt.toDate()) : 'N/A'}</td>
+                    <td class="py-2 text-right">
+                        <button onclick="dashboardManager.viewNotification('${doc.id}')" class="text-blue-600 hover:text-blue-800 mr-2">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button onclick="dashboardManager.resendNotification('${doc.id}')" class="text-green-600 hover:text-green-800 mr-2">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button onclick="dashboardManager.deleteNotification('${doc.id}')" class="text-red-600 hover:text-red-800">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                notificationsTable.appendChild(row);
+            });
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+            alert('Failed to load notifications. See console for details.');
+        }
+    }
+    
+    async loadNotificationTokens() {
+        try {
+            const usersSnapshot = await getDocs(query(usersRef, limit(20)));
+            const tokensTable = document.getElementById('notification-tokens-table');
+            if (!tokensTable) return;
+            
+            tokensTable.innerHTML = '';
+            
+            let hasTokens = false;
+            
+            for (const userDoc of usersSnapshot.docs) {
+                const userData = userDoc.data();
+                const userId = userDoc.id;
+                
+                const tokensQuery = collection(db, 'users', userId, 'tokens');
+                const tokensSnapshot = await getDocs(tokensQuery);
+                
+                if (!tokensSnapshot.empty) {
+                    hasTokens = true;
+                    
+                    tokensSnapshot.forEach(tokenDoc => {
+                        const tokenData = tokenDoc.data();
+                        const row = document.createElement('tr');
+                        
+                        row.innerHTML = `
+                            <td class="py-2">${userData.displayName || userData.email || 'Unknown User'}</td>
+                            <td class="py-2">${tokenData.platform || 'Unknown'} ${tokenData.deviceInfo?.osVersion || ''}</td>
+                            <td class="py-2">
+                                <div class="flex items-center">
+                                    <span class="truncate max-w-xs">${tokenData.token?.substring(0, 20) || 'No Token'}...</span>
+                                    <button onclick="navigator.clipboard.writeText('${tokenData.token || ''}').then(() => alert('Token copied!'))" 
+                                            class="ml-2 text-blue-600 hover:text-blue-800">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="py-2">${tokenData.updatedAt ? formatDate(tokenData.updatedAt.toDate()) : 'N/A'}</td>
+                            <td class="py-2 text-right">
+                                <button onclick="dashboardManager.sendNotificationToToken('${tokenData.token}')" class="text-blue-600 hover:text-blue-800 mr-2">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                                <button onclick="dashboardManager.deleteToken('${userId}', '${tokenDoc.id}')" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        `;
+                        
+                        tokensTable.appendChild(row);
+                    });
+                }
+            }
+            
+            if (!hasTokens) {
+                tokensTable.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-4 text-center text-gray-500">No notification tokens found</td>
+                    </tr>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading notification tokens:', error);
+            alert('Failed to load notification tokens. See console for details.');
+        }
+    }
+    
+    async populateUserDropdown() {
+        try {
+            const usersSnapshot = await getDocs(usersRef);
+            const userSelect = document.getElementById('notification-user');
+            if (!userSelect) return;
+            
+            userSelect.innerHTML = '';
+            
+            usersSnapshot.forEach(doc => {
+                const userData = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = userData.displayName || userData.email || doc.id;
+                userSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error populating user dropdown:', error);
+            alert('Failed to load users. See console for details.');
+        }
+    }
+    
+    showSendNotificationForm() {
+        document.getElementById('send-notification-form').classList.remove('hidden');
+    }
+    
+    hideSendNotificationForm() {
+        document.getElementById('send-notification-form').classList.add('hidden');
+    }
+    
+    async sendNotification() {
+        try {
+            const type = document.getElementById('notification-type').value;
+            const title = document.getElementById('notification-title').value;
+            const message = document.getElementById('notification-message').value;
+            const category = document.getElementById('notification-category').value;
+            let additionalData = document.getElementById('notification-data').value;
+            
+            if (!title || !message) {
+                alert('Title and message are required');
+                return;
+            }
+            
+            // Parse additional data if provided
+            let data = {};
+            if (additionalData) {
+                try {
+                    data = JSON.parse(additionalData);
+                } catch (e) {
+                    alert('Invalid JSON in additional data field');
+                    return;
+                }
+            }
+            
+            // Add category to data
+            data.type = category;
+            
+            // Prepare notification data
+            const notificationData = {
+                title,
+                body: message,
+                data
+            };
+            
+            // Add target based on type
+            if (type === 'topic') {
+                const topic = document.getElementById('notification-topic').value;
+                notificationData.topic = topic;
+                
+                // Save to Firestore
+                await addDoc(notificationsRef, {
+                    title,
+                    message,
+                    type: category,
+                    topic,
+                    data,
+                    createdAt: serverTimestamp()
+                });
+                
+                // Call Firebase Function to send notification
+                const result = await sendNotification({
+                    ...notificationData,
+                    to: `/topics/${topic}`
+                });
+                
+                console.log('Notification sent to topic:', result);
+                alert(`Notification sent to topic: ${topic}`);
+            } else if (type === 'specific') {
+                const userId = document.getElementById('notification-user').value;
+                
+                // Get user token
+                const tokensSnapshot = await getDocs(collection(db, 'users', userId, 'tokens'));
+                
+                if (tokensSnapshot.empty) {
+                    alert('Selected user has no notification tokens');
+                    return;
+                }
+                
+                const tokenDoc = tokensSnapshot.docs[0];
+                const token = tokenDoc.data().token;
+                
+                if (!token) {
+                    alert('Selected user has no valid notification token');
+                    return;
+                }
+                
+                // Get user data for name
+                const userDoc = await getDoc(doc(db, 'users', userId));
+                const userData = userDoc.data();
+                
+                // Save to Firestore
+                await addDoc(notificationsRef, {
+                    title,
+                    message,
+                    type: category,
+                    userId,
+                    userName: userData?.displayName || userData?.email,
+                    data,
+                    createdAt: serverTimestamp()
+                });
+                
+                // Also save to user's notifications collection
+                await addDoc(collection(db, 'users', userId, 'notifications'), {
+                    title,
+                    message,
+                    type: category,
+                    isRead: false,
+                    data,
+                    createdAt: serverTimestamp()
+                });
+                
+                // Call Firebase Function to send notification
+                const result = await sendNotification({
+                    ...notificationData,
+                    token
+                });
+                
+                console.log('Notification sent to user:', result);
+                alert(`Notification sent to user: ${userData?.displayName || userData?.email || userId}`);
+            } else {
+                // Send to all users
+                // Save to Firestore
+                await addDoc(notificationsRef, {
+                    title,
+                    message,
+                    type: category,
+                    data,
+                    createdAt: serverTimestamp()
+                });
+                
+                // Call Firebase Function to send notification to all
+                const result = await sendNotification({
+                    ...notificationData,
+                    to: '/topics/all'
+                });
+                
+                console.log('Notification sent to all users:', result);
+                alert('Notification sent to all users');
+            }
+            
+            // Reset form and hide it
+            document.getElementById('notification-form').reset();
+            this.hideSendNotificationForm();
+            
+            // Reload notifications
+            await this.loadNotifications();
+        } catch (error) {
+            console.error('Error sending notification:', error);
+            alert('Failed to send notification. See console for details.');
+        }
+    }
+    
+    async viewNotification(notificationId) {
+        try {
+            const notificationDoc = await getDoc(doc(notificationsRef, notificationId));
+            if (!notificationDoc.exists()) {
+                alert('Notification not found');
+                return;
+            }
+            
+            const notification = notificationDoc.data();
+            
+            let sentTo = 'All Users';
+            if (notification.topic) {
+                sentTo = `Topic: ${notification.topic}`;
+            } else if (notification.userId) {
+                sentTo = `User: ${notification.userName || notification.userId}`;
+            }
+            
+            alert(`
+Title: ${notification.title}
+Message: ${notification.message}
+Type: ${notification.type || 'N/A'}
+Sent To: ${sentTo}
+Date: ${notification.createdAt ? formatDate(notification.createdAt.toDate()) : 'N/A'}
+Data: ${JSON.stringify(notification.data || {}, null, 2)}
+            `);
+        } catch (error) {
+            console.error('Error viewing notification:', error);
+            alert('Failed to view notification. See console for details.');
+        }
+    }
+    
+    async resendNotification(notificationId) {
+        try {
+            const notificationDoc = await getDoc(doc(notificationsRef, notificationId));
+            if (!notificationDoc.exists()) {
+                alert('Notification not found');
+                return;
+            }
+            
+            const notification = notificationDoc.data();
+            
+            // Prepare notification data
+            const notificationData = {
+                title: notification.title,
+                body: notification.message,
+                data: notification.data || {}
+            };
+            
+            // Add target based on type
+            if (notification.topic) {
+                const result = await sendNotification({
+                    ...notificationData,
+                    to: `/topics/${notification.topic}`
+                });
+                
+                console.log('Notification resent to topic:', result);
+                alert(`Notification resent to topic: ${notification.topic}`);
+            } else if (notification.userId) {
+                // Get user token
+                const tokensSnapshot = await getDocs(collection(db, 'users', notification.userId, 'tokens'));
+                
+                if (tokensSnapshot.empty) {
+                    alert('User has no notification tokens');
+                    return;
+                }
+                
+                const tokenDoc = tokensSnapshot.docs[0];
+                const token = tokenDoc.data().token;
+                
+                if (!token) {
+                    alert('User has no valid notification token');
+                    return;
+                }
+                
+                // Call Firebase Function to send notification
+                const result = await sendNotification({
+                    ...notificationData,
+                    token
+                });
+                
+                console.log('Notification resent to user:', result);
+                alert(`Notification resent to user: ${notification.userName || notification.userId}`);
+            } else {
+                // Resend to all users
+                const result = await sendNotification({
+                    ...notificationData,
+                    to: '/topics/all'
+                });
+                
+                console.log('Notification resent to all users:', result);
+                alert('Notification resent to all users');
+            }
+        } catch (error) {
+            console.error('Error resending notification:', error);
+            alert('Failed to resend notification. See console for details.');
+        }
+    }
+    
+    async deleteNotification(notificationId) {
+        if (!confirm('Are you sure you want to delete this notification?')) {
+            return;
+        }
+        
+        try {
+            await deleteDoc(doc(notificationsRef, notificationId));
+            alert('Notification deleted successfully');
+            await this.loadNotifications();
+        } catch (error) {
+            console.error('Error deleting notification:', error);
+            alert('Failed to delete notification. See console for details.');
+        }
+    }
+    
+    async sendNotificationToToken(token) {
+        try {
+            const title = prompt('Enter notification title:');
+            if (!title) return;
+            
+            const message = prompt('Enter notification message:');
+            if (!message) return;
+            
+            const result = await sendNotification({
+                title,
+                body: message,
+                data: { type: 'custom' },
+                token
+            });
+            
+            console.log('Notification sent to token:', result);
+            alert('Notification sent successfully');
+        } catch (error) {
+            console.error('Error sending notification to token:', error);
+            alert('Failed to send notification. See console for details.');
+        }
+    }
+    
+    async deleteToken(userId, tokenId) {
+        if (!confirm('Are you sure you want to delete this token?')) {
+            return;
+        }
+        
+        try {
+            await deleteDoc(doc(db, 'users', userId, 'tokens', tokenId));
+            alert('Token deleted successfully');
+            await this.loadNotificationTokens();
+        } catch (error) {
+            console.error('Error deleting token:', error);
+            alert('Failed to delete token. See console for details.');
         }
     }
 }
