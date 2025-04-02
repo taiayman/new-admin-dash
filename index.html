@@ -259,32 +259,6 @@
                                 <h3 class="text-lg font-semibold mb-4">Send Push Notification</h3>
                                 <form id="notification-form" class="space-y-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Notification Type</label>
-                                        <select id="notification-type" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            <option value="all">All Users</option>
-                                            <option value="topic">Topic Subscribers</option>
-                                            <option value="specific">Specific User</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div id="topic-selection" class="hidden">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Topic</label>
-                                        <select id="notification-topic" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            <option value="books">Books</option>
-                                            <option value="offers">Offers</option>
-                                            <option value="updates">Updates</option>
-                                            <option value="premium">Premium</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div id="user-selection" class="hidden">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Select User</label>
-                                        <select id="notification-user" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            <!-- Will be populated with users -->
-                                        </select>
-                                    </div>
-                                    
-                                    <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
                                         <input type="text" id="notification-title" required
                                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -299,7 +273,7 @@
                                     </div>
                                     
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Notification Category</label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Notification Type</label>
                                         <select id="notification-category" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="welcome">Welcome</option>
                                             <option value="featured">Featured Books</option>
@@ -311,13 +285,7 @@
                                         </select>
                                     </div>
                                     
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Additional Data (Optional)</label>
-                                        <textarea id="notification-data" rows="3"
-                                                  class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                  placeholder='{"key": "value", "bookId": "123"}'></textarea>
-                                        <p class="text-xs text-gray-500 mt-1">Enter valid JSON data for additional parameters</p>
-                                    </div>
+                                    <input type="hidden" id="notification-type" value="all">
                                     
                                     <div class="flex justify-end space-x-3">
                                         <button type="button" onclick="dashboardManager.hideSendNotificationForm()"
@@ -503,11 +471,6 @@
                 <!-- Checkboxes -->
                 <div class="flex space-x-4">
                     <label class="flex items-center">
-                        <input type="checkbox" id="edit-book-is-premium"
-                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                        <span class="ml-2 text-sm text-gray-700">Premium</span>
-                    </label>
-                    <label class="flex items-center">
                         <input type="checkbox" id="edit-book-featured"
                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                         <span class="ml-2 text-sm text-gray-700">Featured</span>
@@ -563,6 +526,16 @@
                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                         <span class="ml-2 text-sm text-gray-700">Has Pre-recorded Audio</span>
                     </label>
+                </div>
+
+                <!-- Required Plan -->
+                <div class="mb-4">
+                    <label for="book-required-plan" class="block text-sm font-medium text-gray-700">Required Plan</label>
+                    <select id="book-required-plan" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">None (Free Access)</option>
+                        <!-- Plan options will be populated by script.js -->
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Select the subscription plan required to access this book.</p>
                 </div>
 
                 <!-- Buttons -->
@@ -695,14 +668,14 @@
                 <!-- Plan Name -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Plan Name</label>
-                    <input type="text" id="edit-subscription-name" required
+                    <input type="text" id="edit-subscription-name" name="planName" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 
                 <!-- Price -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
-                    <input type="number" id="edit-subscription-price" step="0.01" min="0" required
+                    <input type="number" id="edit-subscription-price" name="planPrice" step="0.01" min="0" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 
@@ -710,12 +683,12 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Duration</label>
-                        <input type="number" id="edit-subscription-duration" min="1" required
+                        <input type="number" id="edit-subscription-duration" name="planDuration" min="1" required
                                class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Duration Type</label>
-                        <select id="edit-subscription-duration-type" required
+                        <select id="edit-subscription-duration-type" name="planDurationType" required
                                 class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="day">Days</option>
                             <option value="week">Weeks</option>
@@ -725,36 +698,22 @@
                     </div>
                 </div>
                 
-                <!-- Stripe Product ID -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Stripe Product ID</label>
-                    <input type="text" id="edit-subscription-product-id"
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-
-                <!-- Stripe Price ID -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Stripe Price ID</label>
-                    <input type="text" id="edit-subscription-price-id"
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                
                 <!-- Features List -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Features (one per line)</label>
-                    <textarea id="edit-subscription-features" rows="4" 
+                    <textarea id="edit-subscription-features" name="planFeatures" rows="4" 
                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                 </div>
                 
                 <!-- Status -->
                 <div class="flex space-x-4">
                     <label class="flex items-center">
-                        <input type="checkbox" id="edit-subscription-active"
+                        <input type="checkbox" id="edit-subscription-active" name="planActive"
                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                         <span class="ml-2 text-sm text-gray-700">Active</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="checkbox" id="edit-subscription-featured"
+                        <input type="checkbox" id="edit-subscription-featured" name="planFeatured"
                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                         <span class="ml-2 text-sm text-gray-700">Featured</span>
                     </label>
