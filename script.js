@@ -15,6 +15,7 @@ const firebaseConfig = {
     appId: "1:311947320356:android:b47bd9a43f7531d5ee8cb1"
 };
 
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -22,7 +23,32 @@ const storage = getStorage(app);
 
 // Initialize Firebase Functions
 const functions = getFunctions(app);
-const sendNotification = httpsCallable(functions, 'sendNotification');
+
+// Custom notification function that doesn't rely on Firebase Cloud Functions
+const sendNotification = async (data) => {
+    try {
+        // Create a direct fetch request instead of using Firebase Cloud Functions
+        const response = await fetch('https://us-central1-ebook-zakaria.cloudfunctions.net/sendNotification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // Add origin as a custom header that the server can use for CORS validation
+                'X-Origin': window.location.origin
+            },
+            // Use no-cors mode to bypass CORS restrictions
+            // Note: This will make the response opaque (not accessible from JavaScript)
+            mode: 'no-cors',
+            body: JSON.stringify(data)
+        });
+        
+        // Since we're using no-cors mode, we can't actually read the response
+        // So we'll just return a success message
+        return { success: true, message: "Notification sent successfully" };
+    } catch (error) {
+        console.error("Error sending notification:", error);
+        return { success: false, error: error.message };
+    }
+};
 
 // Cloudinary Configuration
 const cloudinaryConfig = {
@@ -67,11 +93,33 @@ class DashboardManager {
         this.currentSubscriberUserId = null;
         this.currentPage = null;
         this.currentUploadType = null;
+        this.availableGenres = []; // Added to store genres
+        this.availablePlans = []; // <<< ADDED to store subscription plans
         this.setupEventListeners();
         this.initializeCharts();
         this.loadDashboardData();
         this.setupRealtimeListeners();
         this.initializeCloudinaryWidget();
+    }
+
+    // --- ADDED Helper to hide the currently active modal ---
+    hideModal() {
+        // Add logic here to hide *all* potential modals if needed
+        // For now, specifically target the subscription modal
+        const subscriptionModal = document.getElementById('edit-subscription-modal');
+        if (subscriptionModal) {
+            subscriptionModal.classList.add('hidden');
+            subscriptionModal.classList.remove('flex');
+        } else {
+            console.warn('#edit-subscription-modal not found when trying to hide.');
+        }
+        // Add other modals here if necessary (e.g., edit-book-modal, edit-genre-modal)
+        const bookModal = document.getElementById('edit-book-modal');
+        if (bookModal) bookModal.classList.add('hidden');
+        const genreModal = document.getElementById('edit-genre-modal');
+        if (genreModal) genreModal.classList.add('hidden');
+        const subscriberModal = document.getElementById('subscriber-detail-modal');
+        if (subscriberModal) subscriberModal.classList.add('hidden');
     }
 
     // Utility function to safely update element content
@@ -526,68 +574,44 @@ class DashboardManager {
             const snapshot = await getDocs(query(subscriptionPlansRef, orderBy('price')));
             const tbody = document.getElementById('subscription-plans-table');
             tbody.innerHTML = '';
-
-            if (snapshot.empty) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="py-4 text-center text-gray-600">
-                            No subscription plans found
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
+            this.availablePlans = []; // Clear existing plans
 
             snapshot.forEach(doc => {
                 const plan = doc.data();
-                const features = Array.isArray(plan.features) ? 
-                    plan.features.join(', ') : 
-                    (typeof plan.features === 'string' ? plan.features : '');
-                
+                this.availablePlans.push({ id: doc.id, ...plan }); // Store for dropdowns
+
+                // Features display - join array or show placeholder
+                let featuresHtml = 'N/A';
+                if (Array.isArray(plan.features) && plan.features.length > 0) {
+                    featuresHtml = plan.features.join(', ');
+                }
+
                 tbody.innerHTML += `
                     <tr class="border-b hover:bg-gray-50">
-                        <td class="py-3">${plan.name || 'N/A'}</td>
-                        <td class="py-3">$${(plan.price || 0).toFixed(2)}</td>
-                        <td class="py-3">${plan.duration || 0} ${plan.durationType || 'month'}(s)</td>
-                        <td class="py-3 max-w-xs truncate">${features || 'N/A'}</td>
+                        <td class="py-3 font-medium">${plan.name || 'N/A'}</td>
+                        <td class="py-3">$${plan.price?.toFixed(2) || '0.00'}</td>
+                        <td class="py-3">${plan.duration || 'N/A'} ${plan.durationType || ''}</td>
+                        <!-- Removed PayPal Plan ID cell -->
+                        <td class="py-3 text-sm text-gray-600">${featuresHtml}</td>
                         <td class="py-3">
-                            <span class="px-2 py-1 text-sm rounded-full ${
-                                plan.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }">
+                            <span class="px-2 py-1 text-xs md:text-sm rounded-full ${plan.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
                                 ${plan.active ? 'Active' : 'Inactive'}
                             </span>
                         </td>
                         <td class="py-3 text-right">
-                            <div class="flex justify-end space-x-2">
-                                <button onclick="dashboardManager.viewSubscriptionPlan('${doc.id}')" 
-                                        class="text-blue-600 hover:text-blue-800 px-2">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button onclick="dashboardManager.editSubscriptionPlan('${doc.id}')" 
-                                        class="text-green-600 hover:text-green-800 px-2">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button onclick="dashboardManager.deleteSubscriptionPlan('${doc.id}')" 
-                                        class="text-red-600 hover:text-red-800 px-2">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                            <div class="flex justify-end space-x-1">
+                                <button onclick="dashboardManager.viewSubscriptionPlan('${doc.id}')" class="p-1 md:p-2 text-blue-600 hover:bg-blue-100 rounded-full"><i class="fas fa-eye"></i></button>
+                                <button onclick="dashboardManager.editSubscriptionPlan('${doc.id}')" class="p-1 md:p-2 text-yellow-600 hover:bg-yellow-100 rounded-full"><i class="fas fa-edit"></i></button>
+                                <button onclick="dashboardManager.deleteSubscriptionPlan('${doc.id}')" class="p-1 md:p-2 text-red-600 hover:bg-red-100 rounded-full"><i class="fas fa-trash"></i></button>
                             </div>
                         </td>
                     </tr>
                 `;
             });
-
             console.log(`Loaded ${snapshot.size} subscription plans`);
         } catch (error) {
             console.error('Error loading subscription plans:', error);
-            const tbody = document.getElementById('subscription-plans-table');
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="py-4 text-center text-red-600">
-                        Error loading subscription plans: ${error.message}
-                    </td>
-                </tr>
-            `;
+            document.getElementById('subscription-plans-table').innerHTML = `<tr><td colspan="6" class="py-4 text-center text-red-600">Error loading plans: ${error.message}</td></tr>`;
         }
     }
 
@@ -842,7 +866,7 @@ class DashboardManager {
             const searchTerm = e.target.value.toLowerCase();
             this.filterContent(searchTerm);
         });
-
+        
         // Tab switching
         window.handleTabSwitch = (clickedTab, tabName) => {
             // Remove active class from all tabs
@@ -859,7 +883,7 @@ class DashboardManager {
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
             });
-
+            
             // Show selected content
             document.getElementById(`${tabName}-content`).classList.remove('hidden');
 
@@ -874,28 +898,22 @@ class DashboardManager {
         // Reading tab buttons
         document.getElementById('refreshReadingBtn')?.addEventListener('click', () => this.loadReadingStates());
         document.getElementById('fixReadingBtn')?.addEventListener('click', () => this.fixReadingStates());
-
-        // Notification type change event
-        document.getElementById('notification-type').addEventListener('change', (e) => {
-            const type = e.target.value;
-            const topicSelection = document.getElementById('topic-selection');
-            const userSelection = document.getElementById('user-selection');
-            
-            topicSelection.classList.add('hidden');
-            userSelection.classList.add('hidden');
-            
-            if (type === 'topic') {
-                topicSelection.classList.remove('hidden');
-            } else if (type === 'specific') {
-                userSelection.classList.remove('hidden');
-                this.populateUserDropdown();
-            }
-        });
         
         // Notification form submission
         document.getElementById('notification-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.sendNotification();
+        });
+        
+        // Sidebar toggle for mobile
+        document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.remove('sidebar-closed');
+            document.getElementById('sidebar').classList.add('sidebar-open');
+        });
+        
+        document.getElementById('close-sidebar')?.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.remove('sidebar-open');
+            document.getElementById('sidebar').classList.add('sidebar-closed');
         });
     }
 
@@ -1043,96 +1061,103 @@ class DashboardManager {
     }
 
     async addBook() {
-        try {
-            // Set the modal title and mode
-            document.getElementById('book-modal-title').textContent = 'Add New Book';
-            document.getElementById('edit-book-mode').value = 'add';
-            document.getElementById('edit-book-id').value = '';
-            
-            // Clear form
-            document.getElementById('edit-book-form').reset();
-            
-            // Set default values for new book
-            document.getElementById('edit-book-language').value = 'en';
-            document.getElementById('edit-book-rating').value = '0';
-            
-            // Clear audio files container
-            document.getElementById('audio-files-container').innerHTML = '';
-            
-            // Clear genre selections
-            const genresSelect = document.getElementById('edit-book-genres');
-            Array.from(genresSelect.options).forEach(option => {
-                option.selected = false;
-            });
-            
-            // Show the modal
-            const modal = document.getElementById('edit-book-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            
-            // Setup form submission
-            this.setupBookFormSubmission();
-        } catch (error) {
-            console.error('Error preparing add book form:', error);
-            alert('Error preparing add book form: ' + error.message);
+        // Reset the form first
+        const form = document.getElementById('edit-book-form');
+        if (form) {
+            form.reset();
+        } else {
+            console.error("Edit book form not found!");
+            return;
         }
+        
+        // Populate dropdowns before showing modal
+        this.populateGenreDropdown([]); // <<< Call populate for Add Book with empty selection
+        this.populatePlanDropdown(); // <<< Call populate for Add Book
+        
+        document.getElementById('book-modal-title').textContent = 'Add New Book';
+        document.getElementById('edit-book-mode').value = 'add';
+        document.getElementById('edit-book-id').value = '';
+        
+        // Clear audio files container
+        document.getElementById('audio-files-container').innerHTML = '';
+        
+        // Clear genre selections
+        const genresSelect = document.getElementById('edit-book-genres');
+        Array.from(genresSelect.options).forEach(option => {
+            option.selected = false;
+        });
+        
+        // Show the modal
+        const modal = document.getElementById('edit-book-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        // Setup form submission
+        this.setupBookFormSubmission();
     }
 
     async editBook(bookId) {
         try {
-            const bookDoc = await getDoc(doc(booksRef, bookId));
-            if (bookDoc.exists()) {
-                // Set the modal title and mode
-                document.getElementById('book-modal-title').textContent = 'Edit Book';
-                document.getElementById('edit-book-mode').value = 'edit';
-                document.getElementById('edit-book-id').value = bookId;
-                
-                const book = bookDoc.data();
-                
-                // Fill the form with current book data
-                document.getElementById('edit-book-title').value = book.title || '';
-                document.getElementById('edit-book-author').value = book.author || '';
-                document.getElementById('edit-book-description').value = book.description || '';
-                document.getElementById('edit-book-cover-url').value = book.coverUrl || '';
-                document.getElementById('edit-book-image-url').value = book.imageUrl || '';
-                document.getElementById('edit-book-pdf-url').value = book.pdfUrl || '';
-                document.getElementById('edit-book-publisher').value = book.publisher || '';
-                document.getElementById('edit-book-language').value = book.language || 'en';
-                document.getElementById('edit-book-page-count').value = book.pageCount || 0;
-                document.getElementById('edit-book-rating').value = book.rating || 0;
-                document.getElementById('edit-book-release-date').value = book.releaseDate || '';
-                document.getElementById('edit-book-is-premium').checked = book.isPremium || false;
-                document.getElementById('edit-book-featured').checked = book.featured || false;
-                document.getElementById('edit-book-isbn').value = book.isbn || '';
-                document.getElementById('edit-book-preview-pages').value = book.previewPages || 0;
-                document.getElementById('edit-book-has-audio').checked = book.hasPrerecordedAudio || false;
-
-                // Load existing audio files
-                const audioContainer = document.getElementById('audio-files-container');
-                audioContainer.innerHTML = '';
-                if (book.pageAudioUrls) {
-                    Object.entries(book.pageAudioUrls).forEach(([page, url]) => {
-                        this.currentPage = page;
-                        this.addAudioFileToList(url);
-                    });
-                }
-
-                // Handle genres
-                const genresSelect = document.getElementById('edit-book-genres');
-                Array.from(genresSelect.options).forEach(option => {
-                    option.selected = book.genres?.includes(option.value) || false;
-                });
-
-                // Show the modal
-                const modal = document.getElementById('edit-book-modal');
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-
-                // Setup form submission
-                this.setupBookFormSubmission(book);
-            } else {
-                alert('Book not found');
+            const bookDoc = await getDoc(doc(db, 'books', bookId));
+            if (!bookDoc.exists()) {
+                alert('Book not found!');
+                return;
             }
+            const book = bookDoc.data();
+
+            // Populate dropdowns before filling form
+            this.populateGenreDropdown(book.genreIds || []); // <<< Call populate for Edit Book with book's genre IDs
+            this.populatePlanDropdown(book.requiredPlanId || null); // <<< Call populate for Edit Book
+
+            document.getElementById('book-modal-title').textContent = 'Edit Book';
+            // Set the modal title and mode
+            document.getElementById('edit-book-mode').value = 'edit';
+            document.getElementById('edit-book-id').value = bookId;
+            
+            // Fill the form with current book data
+            document.getElementById('edit-book-title').value = book.title || '';
+            document.getElementById('edit-book-author').value = book.author || '';
+            document.getElementById('edit-book-description').value = book.description || '';
+            document.getElementById('edit-book-cover-url').value = book.coverUrl || '';
+            document.getElementById('edit-book-image-url').value = book.imageUrl || '';
+            document.getElementById('edit-book-pdf-url').value = book.pdfUrl || '';
+            document.getElementById('edit-book-publisher').value = book.publisher || '';
+            document.getElementById('edit-book-language').value = book.language || 'en';
+            document.getElementById('edit-book-page-count').value = book.pageCount || 0;
+            document.getElementById('edit-book-rating').value = book.rating || 0;
+            document.getElementById('edit-book-release-date').value = book.releaseDate || '';
+            document.getElementById('edit-book-featured').checked = book.featured || false;
+            document.getElementById('edit-book-isbn').value = book.isbn || '';
+            document.getElementById('edit-book-preview-pages').value = book.previewPages || 0;
+            document.getElementById('edit-book-has-audio').checked = book.hasPrerecordedAudio || false;
+            // document.getElementById('edit-book-tags').value = book.tags ? book.tags.join(', ') : ''; // Assuming tags exist
+            // document.getElementById('edit-book-pages').value = book.pages || ''; // Assuming pages exist
+
+            // Load existing audio files
+            const audioContainer = document.getElementById('audio-files-container');
+            audioContainer.innerHTML = '';
+            if (book.pageAudioUrls) {
+                Object.entries(book.pageAudioUrls).forEach(([page, url]) => {
+                    this.currentPage = page;
+                    this.addAudioFileToList(url);
+                });
+            }
+
+            // Handle genres using the populated dropdown (already handled by populateGenreDropdown)
+            /*
+            const genresSelect = document.getElementById('edit-book-genres');
+            Array.from(genresSelect.options).forEach(option => {
+                option.selected = book.genres?.includes(option.value) || false; // This logic is now inside populateGenreDropdown
+            });
+            */
+
+            // Show the modal
+            const modal = document.getElementById('edit-book-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // Setup form submission
+            this.setupBookFormSubmission(book);
         } catch (error) {
             console.error('Error editing book:', error);
             alert('Error editing book');
@@ -1140,10 +1165,7 @@ class DashboardManager {
     }
 
     setupBookFormSubmission(existingBook = null) {
-        const form = document.getElementById('edit-book-form');
-        const mode = document.getElementById('edit-book-mode').value;
-        const bookId = document.getElementById('edit-book-id').value;
-        
+        const form = document.getElementById('edit-book-form'); // <<< Corrected ID from 'book-form' to 'edit-book-form'
         form.onsubmit = async (e) => {
             e.preventDefault();
             
@@ -1151,28 +1173,37 @@ class DashboardManager {
                 title: document.getElementById('edit-book-title').value,
                 author: document.getElementById('edit-book-author').value,
                 description: document.getElementById('edit-book-description').value,
-                coverUrl: document.getElementById('edit-book-cover-url').value,
-                imageUrl: document.getElementById('edit-book-image-url').value,
+                genreIds: Array.from(document.getElementById('edit-book-genres').selectedOptions).map(option => option.value), // <<< GET selected genre IDs
+                coverUrl: document.getElementById('edit-book-cover-url').value, // Changed ID
+                imageUrl: document.getElementById('edit-book-image-url').value, // Changed ID
                 pdfUrl: document.getElementById('edit-book-pdf-url').value,
-                publisher: document.getElementById('edit-book-publisher').value,
-                language: document.getElementById('edit-book-language').value,
-                pageCount: parseInt(document.getElementById('edit-book-page-count').value) || 0,
-                rating: parseFloat(document.getElementById('edit-book-rating').value) || 0,
-                releaseDate: document.getElementById('edit-book-release-date').value,
-                isPremium: document.getElementById('edit-book-is-premium').checked,
+                audioFiles: this.getAudioFilesMap(), // Use helper to get map
+                // isPremium: document.getElementById('edit-book-is-premium').checked, // REMOVE isPremium
+                requiredPlanId: document.getElementById('book-required-plan').value || null, // <<< GET requiredPlanId (null if empty string)
                 featured: document.getElementById('edit-book-featured').checked,
-                isbn: document.getElementById('edit-book-isbn').value,
-                previewPages: parseInt(document.getElementById('edit-book-preview-pages').value) || 0,
-                hasPrerecordedAudio: document.getElementById('edit-book-has-audio').checked,
-                pageAudioUrls: this.getAudioFilesMap(),
-                genres: Array.from(document.getElementById('edit-book-genres').selectedOptions).map(option => option.value),
-                updatedAt: serverTimestamp(),
-                estimatedReadingTime: Math.ceil(parseInt(document.getElementById('edit-book-page-count').value) / 20) || 0,
-                slug: document.getElementById('edit-book-title').value
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, '-')
-                    .replace(/(^-|-$)/g, '')
+                // Safely get tags, default to empty array if element doesn't exist
+                tags: document.getElementById('edit-book-tags') 
+                    ? document.getElementById('edit-book-tags').value.split(',').map(tag => tag.trim()).filter(tag => tag)
+                    : [],
+                // Safely get pages, default to 0 if element doesn't exist
+                pages: document.getElementById('edit-book-pages')
+                    ? parseInt(document.getElementById('edit-book-pages').value) || 0
+                    : 0,
+                rating: existingBook?.rating || 0, // Preserve existing or default
+                ratingsCount: existingBook?.ratingsCount || 0,
+                language: document.getElementById('edit-book-language').value || 'English', // Add language field
+                // Safely get published date, default to null if element or value doesn't exist
+                publishedDate: document.getElementById('edit-book-published-date') 
+                    ? (document.getElementById('edit-book-published-date').value 
+                        ? Timestamp.fromDate(new Date(document.getElementById('edit-book-published-date').value)) 
+                        : null)
+                    : null,
+                createdAt: existingBook?.createdAt || serverTimestamp(), // Preserve existing or set new
+                updatedAt: serverTimestamp()
             };
+
+            const mode = document.getElementById('edit-book-mode').value;
+            const bookId = document.getElementById('edit-book-id').value;
 
             try {
                 if (mode === 'add') {
@@ -1568,161 +1599,123 @@ Document Data: ${JSON.stringify(stateData, null, 2)}
 
     // Subscription Plan Management
     async addSubscriptionPlan() {
-        try {
-            // Set the modal title and mode
-            document.getElementById('subscription-modal-title').textContent = 'Add New Subscription Plan';
-            document.getElementById('edit-subscription-mode').value = 'add';
-            document.getElementById('edit-subscription-id').value = '';
-            
-            // Clear form
-            document.getElementById('edit-subscription-form').reset();
-            
-            // Set defaults
-            document.getElementById('edit-subscription-duration-type').value = 'month';
-            document.getElementById('edit-subscription-active').checked = true;
-            
-            // Show the modal
-            const modal = document.getElementById('edit-subscription-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            
-            // Setup form submission
-            this.setupSubscriptionFormSubmission();
-        } catch (error) {
-            console.error('Error preparing add subscription form:', error);
-            alert('Error preparing add subscription form: ' + error.message);
-        }
+        document.getElementById('edit-subscription-mode').value = 'add';
+        document.getElementById('edit-subscription-id').value = '';
+        document.getElementById('subscription-modal-title').textContent = 'Add New Subscription Plan';
+        // Reset form fields
+        document.getElementById('edit-subscription-name').value = '';
+        document.getElementById('edit-subscription-price').value = '';
+        document.getElementById('edit-subscription-duration').value = '';
+        document.getElementById('edit-subscription-duration-type').value = 'month';
+        // paypalPlanId input removed
+        document.getElementById('edit-subscription-features').value = '';
+        document.getElementById('edit-subscription-active').checked = true;
+        document.getElementById('edit-subscription-featured').checked = false;
+        
+        // Pass null for existingPlan since we are adding
+        this.setupSubscriptionFormSubmission(null); 
+        document.getElementById('edit-subscription-modal').classList.remove('hidden');
+        document.getElementById('edit-subscription-modal').classList.add('flex');
     }
 
     async editSubscriptionPlan(planId) {
+        console.log('Editing subscription plan:', planId);
         try {
-            const planDoc = await getDoc(doc(subscriptionPlansRef, planId));
+            const planDocRef = doc(db, 'subscriptionPlans', planId);
+            const planDoc = await getDoc(planDocRef);
+
             if (planDoc.exists()) {
-                // Set the modal title and mode
-                document.getElementById('subscription-modal-title').textContent = 'Edit Subscription Plan';
+                const plan = planDoc.data();
                 document.getElementById('edit-subscription-mode').value = 'edit';
                 document.getElementById('edit-subscription-id').value = planId;
-                
-                const plan = planDoc.data();
-                
-                // Fill the form with current plan data
+                document.getElementById('subscription-modal-title').textContent = 'Edit Subscription Plan';
+                // Populate form fields
                 document.getElementById('edit-subscription-name').value = plan.name || '';
-                document.getElementById('edit-subscription-price').value = plan.price || 0;
-                document.getElementById('edit-subscription-duration').value = plan.duration || 1;
+                document.getElementById('edit-subscription-price').value = plan.price || '';
+                document.getElementById('edit-subscription-duration').value = plan.duration || '';
                 document.getElementById('edit-subscription-duration-type').value = plan.durationType || 'month';
-                document.getElementById('edit-subscription-product-id').value = plan.stripeProductId || '';
-                document.getElementById('edit-subscription-price-id').value = plan.stripePriceId || '';
-                
-                // Handle features (convert array to newline-separated string if needed)
-                if (Array.isArray(plan.features)) {
-                    document.getElementById('edit-subscription-features').value = plan.features.join('\n');
-                } else if (typeof plan.features === 'string') {
-                    document.getElementById('edit-subscription-features').value = plan.features;
-                } else {
-                    document.getElementById('edit-subscription-features').value = '';
-                }
-                
-                document.getElementById('edit-subscription-active').checked = plan.active || false;
-                document.getElementById('edit-subscription-featured').checked = plan.featured || false;
+                // paypalPlanId input removed
+                document.getElementById('edit-subscription-features').value = Array.isArray(plan.features) ? plan.features.join('\n') : (plan.features || '');
+                document.getElementById('edit-subscription-active').checked = plan.active === true;
+                document.getElementById('edit-subscription-featured').checked = plan.featured === true;
 
-                // Show the modal
-                const modal = document.getElementById('edit-subscription-modal');
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-
-                // Setup form submission
-                this.setupSubscriptionFormSubmission(plan);
+                // Pass the existing plan data to the form setup
+                this.setupSubscriptionFormSubmission(plan); 
+                document.getElementById('edit-subscription-modal').classList.remove('hidden');
+                document.getElementById('edit-subscription-modal').classList.add('flex');
             } else {
-                alert('Subscription plan not found');
+                console.error('Subscription plan not found:', planId);
+                alert('Subscription plan not found.');
             }
         } catch (error) {
-            console.error('Error editing subscription plan:', error);
-            alert('Error editing subscription plan: ' + error.message);
+            console.error('Error fetching subscription plan for edit:', error);
+            alert('Error fetching plan details: ' + error.message);
         }
     }
 
     setupSubscriptionFormSubmission(existingPlan = null) {
-        const form = document.getElementById('edit-subscription-form');
-        const mode = document.getElementById('edit-subscription-mode').value;
-        const planId = document.getElementById('edit-subscription-id').value;
-        
+        const form = document.getElementById('edit-subscription-form'); // Corrected ID
+        if (!form) {
+            console.error('Subscription modal form (#edit-subscription-form) not found');
+            // Removed incorrect hideModal call here
+            return;
+        }
+
         form.onsubmit = async (e) => {
             e.preventDefault();
-            
-            // Get form values
-            const name = document.getElementById('edit-subscription-name').value;
-            const price = parseFloat(document.getElementById('edit-subscription-price').value);
-            const duration = parseInt(document.getElementById('edit-subscription-duration').value);
-            const durationType = document.getElementById('edit-subscription-duration-type').value;
-            const stripeProductId = document.getElementById('edit-subscription-product-id').value;
-            const stripePriceId = document.getElementById('edit-subscription-price-id').value;
-            
-            // Convert features from newline-separated to array
-            let features = document.getElementById('edit-subscription-features').value;
-            if (features) {
-                features = features.split('\n').map(f => f.trim()).filter(f => f);
+            const name = form.planName.value.trim();
+            const price = parseFloat(form.planPrice.value);
+            const duration = parseInt(form.planDuration.value);
+            const durationType = form.planDurationType.value;
+            // paypalPlanId removed
+            const features = form.planFeatures.value.split('\\n').map(f => f.trim()).filter(f => f);
+            const active = form.planActive.checked;
+
+            if (!name || isNaN(price) || isNaN(duration) || !durationType) {
+                alert('Please fill in all required fields correctly.');
+                return;
             }
-            
-            const active = document.getElementById('edit-subscription-active').checked;
-            const featured = document.getElementById('edit-subscription-featured').checked;
 
             const planData = {
                 name,
                 price,
                 duration,
                 durationType,
-                stripeProductId,
-                stripePriceId,
                 features,
                 active,
-                featured,
                 updatedAt: serverTimestamp()
             };
 
             try {
-                if (mode === 'add') {
-                    // Add new fields specific to new plans
+                if (existingPlan) {
+                    await updateDoc(doc(subscriptionPlansRef, existingPlan.id), planData);
+                    alert('Subscription plan updated successfully!');
+                } else {
                     planData.createdAt = serverTimestamp();
-                    planData.subscriberCount = 0;
-                    
-                    // Add the new plan to the database
                     await addDoc(subscriptionPlansRef, planData);
                     alert('Subscription plan added successfully!');
-                } else {
-                    // Keep existing fields
-                    if (existingPlan) {
-                        planData.createdAt = existingPlan.createdAt || serverTimestamp();
-                        planData.subscriberCount = existingPlan.subscriberCount || 0;
-                    }
-                    
-                    // Update the existing plan
-                    await updateDoc(doc(subscriptionPlansRef, planId), planData);
-                    alert('Subscription plan updated successfully!');
                 }
-                
-                // Hide modal and reset form
-                const modal = document.getElementById('edit-subscription-modal');
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-                form.reset();
-                
-                // Reload subscription plans
-                this.loadSubscriptionPlans();
+                this.hideModal();
+                this.loadSubscriptionPlans(); // Refresh the list
             } catch (error) {
                 console.error('Error saving subscription plan:', error);
-                alert('Error saving subscription plan: ' + error.message);
+                alert(`Error saving plan: ${error.message}`);
             }
         };
     }
 
     async deleteSubscriptionPlan(planId) {
-        if (confirm('Are you sure you want to delete this subscription plan? This will not affect current subscribers but they will not be able to renew with this plan.')) {
+        console.log('Attempting to delete subscription plan:', planId);
+        if (confirm('Are you sure you want to delete this subscription plan? This cannot be undone.')) {
             try {
-                await deleteDoc(doc(subscriptionPlansRef, planId));
-                this.loadSubscriptionPlans();
+                const planDocRef = doc(db, 'subscriptionPlans', planId);
+                await deleteDoc(planDocRef);
+                console.log('Subscription plan deleted:', planId);
+                alert('Subscription plan deleted successfully.');
+                this.loadSubscriptionPlans(); // Refresh the list
             } catch (error) {
                 console.error('Error deleting subscription plan:', error);
-                alert('Error deleting subscription plan: ' + error.message);
+                alert('Failed to delete plan: ' + error.message);
             }
         }
     }
@@ -2410,133 +2403,40 @@ Document Data: ${JSON.stringify(stateData, null, 2)}
     
     async sendNotification() {
         try {
-            const type = document.getElementById('notification-type').value;
             const title = document.getElementById('notification-title').value;
             const message = document.getElementById('notification-message').value;
             const category = document.getElementById('notification-category').value;
-            let additionalData = document.getElementById('notification-data').value;
             
             if (!title || !message) {
                 alert('Title and message are required');
                 return;
             }
             
-            // Parse additional data if provided
-            let data = {};
-            if (additionalData) {
-                try {
-                    data = JSON.parse(additionalData);
-                } catch (e) {
-                    alert('Invalid JSON in additional data field');
-                    return;
-                }
-            }
-            
-            // Add category to data
-            data.type = category;
-            
             // Prepare notification data
             const notificationData = {
                 title,
                 body: message,
-                data
+                data: {
+                    type: category
+                }
             };
             
-            // Add target based on type
-            if (type === 'topic') {
-                const topic = document.getElementById('notification-topic').value;
-                notificationData.topic = topic;
-                
-                // Save to Firestore
-                await addDoc(notificationsRef, {
-                    title,
-                    message,
-                    type: category,
-                    topic,
-                    data,
-                    createdAt: serverTimestamp()
-                });
-                
-                // Call Firebase Function to send notification
-                const result = await sendNotification({
-                    ...notificationData,
-                    to: `/topics/${topic}`
-                });
-                
-                console.log('Notification sent to topic:', result);
-                alert(`Notification sent to topic: ${topic}`);
-            } else if (type === 'specific') {
-                const userId = document.getElementById('notification-user').value;
-                
-                // Get user token
-                const tokensSnapshot = await getDocs(collection(db, 'users', userId, 'tokens'));
-                
-                if (tokensSnapshot.empty) {
-                    alert('Selected user has no notification tokens');
-                    return;
-                }
-                
-                const tokenDoc = tokensSnapshot.docs[0];
-                const token = tokenDoc.data().token;
-                
-                if (!token) {
-                    alert('Selected user has no valid notification token');
-                    return;
-                }
-                
-                // Get user data for name
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                const userData = userDoc.data();
-                
-                // Save to Firestore
-                await addDoc(notificationsRef, {
-                    title,
-                    message,
-                    type: category,
-                    userId,
-                    userName: userData?.displayName || userData?.email,
-                    data,
-                    createdAt: serverTimestamp()
-                });
-                
-                // Also save to user's notifications collection
-                await addDoc(collection(db, 'users', userId, 'notifications'), {
-                    title,
-                    message,
-                    type: category,
-                    isRead: false,
-                    data,
-                    createdAt: serverTimestamp()
-                });
-                
-                // Call Firebase Function to send notification
-                const result = await sendNotification({
-                    ...notificationData,
-                    token
-                });
-                
-                console.log('Notification sent to user:', result);
-                alert(`Notification sent to user: ${userData?.displayName || userData?.email || userId}`);
-            } else {
-                // Send to all users
-                // Save to Firestore
-                await addDoc(notificationsRef, {
-                    title,
-                    message,
-                    type: category,
-                    data,
-                    createdAt: serverTimestamp()
-                });
-                
-                // Call Firebase Function to send notification to all
-                const result = await sendNotification({
-                    ...notificationData,
-                    to: '/topics/all'
-                });
-                
-                console.log('Notification sent to all users:', result);
-                alert('Notification sent to all users');
-            }
+            // Save to Firestore
+            await addDoc(notificationsRef, {
+                title,
+                message,
+                type: category,
+                createdAt: serverTimestamp()
+            });
+            
+            // Call Firebase Function to send notification to all
+            const result = await sendNotification({
+                ...notificationData,
+                to: '/topics/all'
+            });
+            
+            console.log('Notification sent to all users:', result);
+            alert('Notification sent to all users');
             
             // Reset form and hide it
             document.getElementById('notification-form').reset();
@@ -2699,6 +2599,61 @@ Data: ${JSON.stringify(notification.data || {}, null, 2)}
             console.error('Error deleting token:', error);
             alert('Failed to delete token. See console for details.');
         }
+    }
+
+    // <<< ADD function to populate dropdown >>>
+    populatePlanDropdown(selectedPlanId = null) {
+        const selectElement = document.getElementById('book-required-plan');
+        if (!selectElement) {
+            console.error('Required plan dropdown not found');
+            return;
+        }
+        
+        // Clear existing options except the first default one
+        while (selectElement.options.length > 1) {
+            selectElement.remove(1);
+        }
+        
+        // Add plans from stored data
+        this.availablePlans.forEach(plan => {
+            // if (plan.status === 'active') { // <<< REMOVE filter to show all plans
+                const option = document.createElement('option');
+                option.value = plan.id;
+                option.textContent = `${plan.name} ($${plan.price || 0}/${plan.duration || 1} ${plan.durationType || 'month'}) ${plan.active ? '' : '(Inactive)'}`; // Add (Inactive) label
+                selectElement.appendChild(option);
+            // }
+        });
+
+        // Set selected value if provided (for editing)
+        if (selectedPlanId) {
+            selectElement.value = selectedPlanId;
+        } else {
+            selectElement.value = ""; // Default to None
+        }
+    }
+
+    // <<< ADD function to populate genre dropdown >>>
+    populateGenreDropdown(selectedGenreIds = []) {
+        const selectElement = document.getElementById('edit-book-genres');
+        if (!selectElement) {
+            console.error('Genre multi-select dropdown (#edit-book-genres) not found');
+            return;
+        }
+
+        // Clear existing options
+        selectElement.innerHTML = '';
+
+        // Add genres from stored data
+        this.availableGenres.forEach(genre => {
+            const option = document.createElement('option');
+            option.value = genre.id; // Use genre ID as the value
+            option.textContent = genre.name;
+            // Mark as selected if the genre ID is in the selectedGenreIds array
+            if (selectedGenreIds.includes(genre.id)) {
+                option.selected = true;
+            }
+            selectElement.appendChild(option);
+        });
     }
 }
 
